@@ -56,8 +56,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Resolve repo root (default: parent of this script's directory)
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $RepoRoot) {
-    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
     $RepoRoot = Split-Path -Parent $scriptDir
 }
 # Support both layouts: repo-style (<root>\driver\build) and raw upstream (<root>\build)
@@ -95,6 +95,22 @@ if (-not $vsPath) { Write-Host "FAIL: VS not installed"; exit 1 }
 if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: nuget restore HidFilter"; exit 1 }
 & $NuGetExe restore "$root\AmtPtpDeviceUsbUm\packages.config" -PackagesDirectory "$root\packages\"
 if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: nuget restore UsbUm"; exit 1 }
+
+# 2b) Reference assemblies for the control panel (.NET 4.7.2). The build machine may lack
+#     the .NET Framework Developer Pack (=> MSB3644); the NuGet reference-assemblies
+#     net472 flavor provides them. TargetFrameworkRootPath must point at the package's
+#     build\ root — MSBuild appends .NETFramework\v4.7.2\ itself.
+$refAsmOut = Join-Path $root 'packages\dotnet-refassemblies'
+& $NuGetExe install Microsoft.NETFramework.ReferenceAssemblies.net472 -Version 1.0.3 -OutputDirectory $refAsmOut
+if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: nuget install Microsoft.NETFramework.ReferenceAssemblies.net472"; exit 1 }
+$refAsmRoot = Join-Path $refAsmOut 'Microsoft.NETFramework.ReferenceAssemblies.net472.1.0.3\build'
+$v472Dir = Join-Path $refAsmRoot '.NETFramework\v4.7.2'
+if (-not (Test-Path $v472Dir)) {
+    $pkgDir = Get-ChildItem $refAsmOut -Directory -Filter 'Microsoft.NETFramework.ReferenceAssemblies.net472.*' | Select-Object -First 1
+    if ($pkgDir) { $refAsmRoot = Join-Path $pkgDir.FullName 'build'; $v472Dir = Join-Path $refAsmRoot '.NETFramework\v4.7.2' }
+}
+if (-not (Test-Path $v472Dir)) { Write-Host "FAIL: .NET 4.7.2 reference assemblies not found under $refAsmOut"; exit 1 }
+Write-Host "refassemblies: $refAsmRoot"
 
 # 3) Patch the WDK NuGet package: the WDK MSBuild targets hardcode the ApiValidator
 #    path ...WDK.x64.10.0.26100.6584\c\bin\10.0.26100.0\x86\ApiValidator.exe, but the
@@ -144,11 +160,12 @@ Write-Host "msbuild: $msbuild"
 if (-not $msbuild) { Write-Host "FAIL: msbuild not found"; exit 1 }
 
 function Invoke-MtBuild {
-    param([string]$Project, [string]$Platform, [bool]$Required)
+    param([string]$Project, [string]$Platform, [bool]$Required, [string[]]$ExtraProps = @())
     Write-Host "=== BUILD $Project [$Platform]"
     $mbArgs = @($Project, '/p:Configuration=Release', "/p:Platform=$Platform",
                 '/p:SpectreMitigation=false', '/p:TargetPlatformVersion=10.0.26100.0',
                 '/m', '/nologo', '/v:m')
+    foreach ($ep in $ExtraProps) { $mbArgs += $ep }
     & $msbuild @mbArgs
     if ($LASTEXITCODE -ne 0) {
         if ($Required) { Write-Host "FAIL: build $Project $Platform"; exit 1 }
@@ -163,7 +180,8 @@ if (-not $SkipArm64) {
     Invoke-MtBuild "$root\AmtPtpDeviceUsbUm\MagicTrackpad2PtpDevice.vcxproj" 'ARM64' $false
     Invoke-MtBuild "$root\AmtPtpHidFilter\AmtPtpHidFilter.vcxproj" 'ARM64' $false
 }
-Invoke-MtBuild "$root\AmtPtpControlPanel\AmtPtpControlPanel.csproj" 'AnyCPU' $true
+Invoke-MtBuild "$root\AmtPtpControlPanel\AmtPtpControlPanel.csproj" 'AnyCPU' $true `
+    -ExtraProps @("/p:TargetFrameworkRootPath=$refAsmRoot\")
 Write-Host "BUILD_ALL_OK"
 
 # 7) Assemble result tree (same as make.bat; ARM64 files only if built)
@@ -210,21 +228,33 @@ if ($win10Inf) {
     Write-Host "WARN: no WIN10 INF found, using stock AMD64 INF"
 }
 
-# 9) Self-signed cert (create if absent), then sign everything with it
-$thumbprint = (Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.FriendlyName -eq 'MtTrackpadBuild' } | Select-Object -First 1).Thumbprint
-if (-not $thumbprint) {
-    $cert = New-SelfSignedCertificate -CertStoreLocation Cert:\CurrentUser\My -FriendlyName 'MtTrackpadBuild' `
-        -KeyUsage CertSign -KeyAlgorithm RSA -KeyLength 2048 -MonthsWithNotAfter 36
-    $thumbprint = $cert.Thumbprint
-    # Export .cer for the package
-    $bytes = [System.IO.File]::ReadAllBytes($cert.CertExport('CERT'))
-    [IO.File]::WriteAllBytes("$result\MtTrackpad.cer", $bytes)
-    Write-Host "CERT_CREATED: $thumbprint"
-} else {
-    $certObj = Get-Item "Cert:\CurrentUser\My\$thumbprint"
-    $bytes = [System.IO.File]::ReadAllBytes($certObj.CertExport('CERT'))
-    [IO.File]::WriteAllBytes("$result\MtTrackpad.cer", $bytes)
+# 9) Code-signing cert: import the pre-generated keypair if absent, then sign everything with it.
+#    The keypair is pre-generated with openssl (KeyUsage=critical,digitalSignature +
+#    EKU=codeSigning) because PS 5.1's New-SelfSignedCertificate stamps a TLS EKU,
+#    which signtool rejects.
+$pfxPath = Join-Path $scriptDir 'certs\MtTrackpad.pfx'
+if (-not (Test-Path $pfxPath)) { Write-Host "FAIL: $pfxPath not found"; exit 1 }
+$pwd = ConvertTo-SecureString 'mttrackpad' -AsPlainText -Force
+$probe = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($pfxPath, $pwd)
+$thumbprint = $probe.Thumbprint
+$probeStore = New-Object System.Security.Cryptography.X509Certificates.X509Store('My', 'CurrentUser')
+$probeStore.Open('ReadOnly')
+$haveIt = $false
+foreach ($c in $probeStore.Certificates) { if ($c.Thumbprint -eq $thumbprint) { $haveIt = $true; break } }
+$probeStore.Close()
+if ($haveIt) {
+    # Export .cer for the package (public cert only)
+    [IO.File]::WriteAllBytes("$result\MtTrackpad.cer", $probe.RawData)
     Write-Host "CERT_EXISTS: $thumbprint"
+} else {
+    $pfxCert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($pfxPath, $pwd, ([System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::PersistKey -bor [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::UserKeyStore))
+    $newStore = New-Object System.Security.Cryptography.X509Certificates.X509Store('My', 'CurrentUser')
+    $newStore.Open('ReadWrite')
+    $newStore.Add($pfxCert)
+    $newStore.Close()
+    # Export .cer for the package (public cert only; the private key stays in CurrentUser\My)
+    [IO.File]::WriteAllBytes("$result\MtTrackpad.cer", $pfxCert.Export('CERT'))
+    Write-Host "CERT_CREATED: $thumbprint"
 }
 
 # Trust the cert: try LocalMachine\Root directly (works when elevated),
@@ -268,19 +298,19 @@ if (Test-Path "$result\ARM64\AmtPtpDeviceUsbUm.dll") { $sign += "$result\ARM64\A
 if (Test-Path "$result\ARM64\AmtPtpHidFilter.sys") { $sign += "$result\ARM64\AmtPtpHidFilter.sys" }
 foreach ($f in $sign) {
     Write-Host "SIGNING $f"
-    & $signtool sign /fd sha256 /sha1 $thumbprint $f
+    & $signtool sign /fd sha256 /f $pfxPath /p mttrackpad $f
     if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: sign $f"; exit 1 }
 }
 
 # 11) inf2cat + sign CAT (AMD64 always; ARM64 only if the package has binaries)
 & $inf2cat /driver:$result\AMD64 /os:10_X64
 if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: inf2cat AMD64"; exit 1 }
-& $signtool sign /fd sha256 /sha1 $thumbprint "$result\AMD64\AmtPtpDevice.cat"
+& $signtool sign /fd sha256 /f $pfxPath /p mttrackpad "$result\AMD64\AmtPtpDevice.cat"
 if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: sign cat AMD64"; exit 1 }
 if ((Get-ChildItem "$result\ARM64" -Filter '*.dll' -ErrorAction SilentlyContinue) -or (Get-ChildItem "$result\ARM64" -Filter '*.sys' -ErrorAction SilentlyContinue)) {
     & $inf2cat /driver:$result\ARM64 /os:10_RS3_ARM64
     if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: inf2cat ARM64"; exit 1 }
-    & $signtool sign /fd sha256 /sha1 $thumbprint "$result\ARM64\AmtPtpDevice.cat"
+    & $signtool sign /fd sha256 /f $pfxPath /p mttrackpad "$result\ARM64\AmtPtpDevice.cat"
     if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: sign cat ARM64"; exit 1 }
 }
 

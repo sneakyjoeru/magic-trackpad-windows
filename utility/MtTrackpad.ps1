@@ -337,14 +337,22 @@ function Invoke-Install {
     $inf = Join-Path $amd64 'AmtPtpDevice.inf'
     if (-not (Test-Path $inf)) { throw "Driver INF not found at $inf" }
 
-    # 1. Trust our self-signed code-signing certificate (so the CAT validates)
+    # 1. Trust our self-signed code-signing certificate (so the CAT validates).
+    #    Import into LocalMachine\Root (CAT signature validation walks the root store)
+    #    and LocalMachine\CA (legacy pnputil path).
     $cer = Get-ChildItem -Path $Dir -Filter '*.cer' -Recurse | Select-Object -First 1
     if ($cer) {
         $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($cer.FullName)
-        $store = New-Object System.Security.Cryptography.X509Certificates.X509Store('CA', 'LocalMachine')
-        $store.Open('ReadWrite')
-        $store.Add($cert)
-        $store.Close()
+        foreach ($storeName in @('Root', 'CA')) {
+            try {
+                $store = New-Object System.Security.Cryptography.X509Certificates.X509Store($storeName, 'LocalMachine')
+                $store.Open('ReadWrite')
+                $store.Add($cert)
+                $store.Close()
+            } catch {
+                Write-Output "WARN: could not import cert into LocalMachine\$storeName: $($_.Exception.Message)"
+            }
+        }
         Write-Output "Trusted signing certificate: $($cert.Subject)"
     }
 
