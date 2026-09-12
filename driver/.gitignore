@@ -1,0 +1,8 @@
+.vs/
+bin/
+obj/
+AmtPtpDeviceUsbUm/build/
+AmtPtpHidFilter/build/
+intermediate/
+build/result/
+/packages
