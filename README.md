@@ -33,7 +33,8 @@ magic-trackpad-windows/
 │       └── AmtPtpDevice_AMD64_WIN10.inf    # Windows 10 x64 (used on the streamer PC)
 └── utility/
     ├── MtTrackpad.ps1               # setup & control utility (this is the main tool)
-    └── Verify-MtTrackpad.ps1        # unattended PASS/FAIL verification harness
+    ├── Verify-MtTrackpad.ps1        # unattended PASS/FAIL verification harness
+    └── Build-MtTrackpad.ps1         # non-interactive build + sign + inf2cat helper
 ```
 
 ## Devices supported
@@ -93,6 +94,17 @@ The `FeedbackClick` / `FeedbackRelease` DWORDs encode vibration intensity (high 
 `-Silent` masks the audio (low) byte; `-NoSilent` restores it.
 
 ## Building the driver
+
+### Option A — non-interactive helper (recommended for headless builds)
+
+```powershell
+# from an elevated PowerShell, anywhere:
+.\utility\Build-MtTrackpad.ps1 -RepoRoot <path-to-this-repo> [-NuGetExe <path-to-nuget.exe>]
+```
+
+Automates the whole flow with **no prompts**: locates VS2022 + SDK tools, restores NuGet packages, builds all targets, assembles `driver\build\result\`, swaps in the Win10 INF, creates/trusts a self‑signed code‑signing cert, signs all binaries + CATs, and runs `inf2cat`. Prints `BUILD_COMPLETE` on success.
+
+### Option B — interactive make.bat
 
 Requires **Visual Studio 2022** with the *Desktop development in C++* and *Windows Driver Kit* workloads, run from an **x64 Native Tools Command Prompt for VS 2022**.
 
