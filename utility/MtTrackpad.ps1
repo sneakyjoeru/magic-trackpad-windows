@@ -350,7 +350,7 @@ function Invoke-Install {
                 $store.Add($cert)
                 $store.Close()
             } catch {
-                Write-Output "WARN: could not import cert into LocalMachine\$storeName: $($_.Exception.Message)"
+                Write-Output "WARN: could not import cert into LocalMachine/${storeName}: $($_.Exception.Message)"
             }
         }
         Write-Output "Trusted signing certificate: $($cert.Subject)"
