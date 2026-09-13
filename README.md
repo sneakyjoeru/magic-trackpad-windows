@@ -132,6 +132,28 @@ A self‑signed code‑signing certificate is generated on the build machine (th
 
 Signals used (no keyboard needed): PnP instance status + bound service, `AmtPtpHidFilter` service state, `\\.\AmtPtpControlDeviceUm` IOCTL round‑trip, battery IOCTL (informational), and driver‑related System‑log errors since a given time.
 
+## Known issues & fixes
+
+### "USB Input Device" driver error (CM_ERROR 10) on the wired trackpad
+
+**Symptom.** In Device Manager, the composite device `USB\VID_05AC&PID_0324` shows its interface
+`MI_00` ("USB Input Device") with a yellow error badge (CM_ERROR 10 — "device not started"),
+while `MI_01` (the real touchpad interface, bound to `AmtPtpDeviceUsbUm`) works normally.
+
+**Root cause.** The Magic Trackpad 2 (USB‑C) is a USB composite device with several interfaces.
+Interface `MI_00` is an auxiliary/vendor‑defined interface that carries no HID usage the stock
+`HidUsb` driver can bind to. Apple's official v2.0 driver INF — and this repo's INF before
+version **2026.3984** — bind only `MI_01` for `PID_0324`, leaving `MI_00` unbound. Windows then
+falls back to the stock `HidUsb` driver for `MI_00`, that binding fails to initialise
+(CM_ERROR 10) and the yellow badge appears. The error is cosmetic: `MI_00` is not the touch
+interface, so pointer/touch/drag keep working through `MI_01`.
+
+**Fix (driver version 2026.3984).** Bind `USB\Vid_05ac&Pid_0324&MI_00` to a **null driver**
+(an empty install section with no service and no files) in
+[`driver/build/AmtPtpDevice_AMD64_WIN10.inf`](driver/build/AmtPtpDevice_AMD64_WIN10.inf).
+The explicit binding stops the `HidUsb` fallback, so the interface no longer errors; the
+absence of a service means no second (phantom) touch/pointer instance appears.
+
 ## Wireless phase (TODO)
 
 1. Pair the trackpad over Bluetooth on the target PC.

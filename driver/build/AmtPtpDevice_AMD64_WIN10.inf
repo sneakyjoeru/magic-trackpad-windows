@@ -8,7 +8,7 @@ Class = HIDClass
 ClassGuid = {745a17a0-74d3-11d0-b6fe-00a0c90f57da}
 Provider = %ManufacturerName%
 CatalogFile = AmtPtpDevice.cat
-DriverVer = 09/13/2026,2026.3983.1.1000
+DriverVer = 09/13/2026,2026.3984.1.1000
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -59,6 +59,8 @@ AmtPtpHidFilter.sys   = 1,,
 %AmtPtpDeviceUsbUm.DeviceDesc%=AmtPtpDeviceUsbUm_Install, USB\Vid_05ac&Pid_0265&MI_01
 ; MT2 USB-C
 %AmtPtpDeviceUsbUm.DeviceDesc%=AmtPtpDeviceUsbUm_Install, USB\Vid_05ac&Pid_0324&MI_01
+; MT2 USB-C auxiliary interface: bind to a null driver so Windows does not fall back to stock HidUsb (CMERR=10 badge)
+%MtNullDeviceDesc%=MtNullDevice, USB\Vid_05ac&Pid_0324&MI_00
 ; Magic Trackpad 2 USB-C resold under VID 27A7 (both interfaces; remove the unused binding if a phantom pointer appears)
 %AmtPtpDeviceUsbUm.DeviceDesc%=AmtPtpDeviceUsbUm_Install, USB\Vid_27a7&Pid_2501&MI_00
 %AmtPtpDeviceUsbUm.DeviceDesc%=AmtPtpDeviceUsbUm_Install, USB\Vid_27a7&Pid_2501&MI_01
@@ -76,6 +78,12 @@ AmtPtpHidFilter.sys   = 1,,
 ; Nothing!
 
 [AmtPtpHidFilter_NullDevice.Services]
+AddService = ,2    ; no value for the service name
+
+; USB null device (no service, no files) - keeps the composite interface from erroring
+[MtNullDevice]
+
+[MtNullDevice.Services]
 AddService = ,2    ; no value for the service name
 
 ; File payloads for each set of driver
@@ -163,6 +171,7 @@ ErrorControl = 1
 ServiceBinary = %12%\WUDFRd.sys
 
 [Strings]
+MtNullDeviceDesc = "USB Input Device"
 REG_MULTI_SZ = 0x00010000
 SPSVCINST_ASSOCSERVICE = 0x00000002
 ManufacturerName = "Bingxing Wang, Vito Plantamura"
