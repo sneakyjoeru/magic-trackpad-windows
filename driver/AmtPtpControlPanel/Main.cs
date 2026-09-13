@@ -188,7 +188,7 @@ namespace AmtPtpControlPanel
             Int32 feedbackRelease = 0x000014;
             Int32 stopPressure = 0;
             Int32 stopSize = -1;
-            Int32 ignoreButtonFinger = 1;
+            Int32 ignoreButtonFinger = 0;
             Int32 ignoreNearFingers = 1;
             Int32 palmRejection = 1;
 

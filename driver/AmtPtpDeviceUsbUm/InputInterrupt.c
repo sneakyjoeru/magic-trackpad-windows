@@ -480,7 +480,11 @@ AmtPtpServiceTouchInputInterruptType5(
 		DeviceContext->ButtonDisabled = ReadSettingValue(L"ButtonDisabled", 0) ? TRUE : FALSE;
 		DeviceContext->StopPressure = ReadSettingValue(L"StopPressure", 0);
 		DeviceContext->StopSize = ReadSettingValue(L"StopSize", 0xffffffff);
-		DeviceContext->IgnoreButtonFinger = ReadSettingValue(L"IgnoreButtonFinger", 1) ? TRUE : FALSE;
+		// Default: 0 (off) so that holding the button and moving the same
+		// finger performs a drag (the pointer follows the finger). With 1
+		// (on) the button finger is locked at the press point and only other
+		// fingers move the pointer (two-finger "mouse" style).
+		DeviceContext->IgnoreButtonFinger = ReadSettingValue(L"IgnoreButtonFinger", 0) ? TRUE : FALSE;
 		DeviceContext->IgnoreNearFingers = ReadSettingValue(L"IgnoreNearFingers", 1) ? TRUE : FALSE;
 		DeviceContext->PalmRejection = ReadSettingValue(L"PalmRejection", 0) ? TRUE : FALSE;
 	}
@@ -573,6 +577,13 @@ AmtPtpServiceTouchInputInterruptType5(
 
 						if (contact->TipSwitch)
 						{
+							// Locked slot: freeze the reported position at the last
+							// unlocked (free-move) position while the button is
+							// held, and keep the slot locked across the button
+							// release so the next press does not teleport the
+							// pointer to the release location. The slot is only
+							// released when the finger leaves the surface (tip
+							// off) or when a new finger takes over the slot.
 							prev_contact = contact;
 							contact->Id = UINT32_SET_MSB(contact->Id);
 						}
