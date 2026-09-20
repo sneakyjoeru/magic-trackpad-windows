@@ -7,6 +7,8 @@ the system tray. Wired over USB‑C or wireless over Bluetooth.
 Built on the open‑source driver [MagicTrackpad2ForWindows](https://github.com/vitoplantamura/MagicTrackpad2ForWindows)
 with the additions this repo needs in practice:
 
+<img width="765" height="851" alt="image" src="https://github.com/user-attachments/assets/e48c0c1a-b21a-4e4e-87b1-039384188705" />
+
 - a signed driver package **plus the certificates it needs**, so one script installs everything;
 - a **one‑click installer** (`Install.cmd`) — UAC prompt, nothing to type;
 - a small **VID 27A7** patch (some Magic Trackpad 2 units enumerate with vendor ID `27A7`
