@@ -43,9 +43,8 @@ certificates, tray control panel and utilities. Two paths: install the ready-mad
 
    The installer
 
-   * imports `certs\MtRootCA.cer` and `certs\MtPtpSigner.cer` into
-     `LocalMachine\Root`, `\CA` and `\TrustedPublisher` (required — the driver package is
-     self-signed),
+   * imports the **Microsoft-signed** driver package from `driver\` (no certificates
+     involved — the package is signed by Microsoft's Hardware Compatibility Publisher),
    * imports the driver package with `pnputil /add-driver driver\AmtPtpDevice.inf /install`
      (skipped, with a re-bind instead, if the package is already in the driver store),
    * re-scans PnP and prints the state of every present trackpad device,
@@ -61,8 +60,6 @@ certificates, tray control panel and utilities. Two paths: install the ready-mad
 The same thing without the installer:
 
 ```powershell
-certutil -addstore -f Root             certs\MtRootCA.cer
-certutil -addstore -f TrustedPublisher certs\MtPtpSigner.cer
 pnputil /add-driver driver\AmtPtpDevice.inf /install
 pnputil /scan-devices
 .\AmtPtpControlPanel.exe
@@ -170,49 +167,20 @@ started.
 
 ---
 
-## Driver signing: self-signed vs Microsoft-signed
+## Driver signing
 
-The archive ships **two** driver packages:
+The archive ships **one** driver package, `driver\`, **signed by Microsoft** (Windows Hardware
+Compatibility Publisher). It needs *no* test signing and *no* certificates, works with Secure Boot
+enabled, and covers the Apple vendor IDs including USB and Bluetooth (`PID_0324`, `0265`, the other
+MT2 PIDs).
 
-| folder | signature | needs test signing | covers |
-|---|---|---|---|
-| `driver\` | self-signed (`MtPtpSigner` / `MtRootCA`, trusted by `install.ps1`) | **yes** | VID `05AC` (all listed PIDs incl. `0324`, `0265`) + VID `27A7` clones |
-| `driver-ms-signed\` | Microsoft Hardware Compatibility Publisher | no | VID `05AC` (incl. Bluetooth `0324`/`0265`) |
-
-The self-signed **user-mode** driver installs on any machine once its certificate is trusted, but
-its **kernel** filter (`AmtPtpHidFilter.sys`, which carries the Bluetooth bindings and the
-precision touchpad filter) only loads when Windows **test signing** is on:
-
-```powershell
-bcdedit /set testsigning on      # Secure Boot must be OFF, then reboot
-# Windows shows "Test Mode" on the desktop afterwards
-```
-
-If test signing cannot be enabled (Secure Boot on, corporate policy, Windows 11),
-install the **Microsoft-signed** package instead — no certificates, no test mode:
-
-```
-Fix-Trackpad-Error2.cmd                 (double-click: clean + signed install + device restart)
-Install-Microsoft-Signed.cmd            (just the signed install)
-Install-Microsoft-Signed.cmd -Clean     (signed install, wiping old drivers first)
-```
-
-`Fix-Trackpad-Error2.cmd` is the one to use when the panel already reports error 2: it removes every
-old Apple/trackpad driver package and device instance, installs the Microsoft-signed driver,
-restarts the present trackpad device instances (`pnputil /restart-device`) so Windows really
-re-binds them - a device stuck in *Error* otherwise stays there - and starts the panel again.
-
-> Our self-signed INF carries the newer `DriverVer`, so when both packages are installed Windows
-> can keep preferring the one that cannot load. Remove the old package first
-> (`Uninstall-All-Apple-Drivers.cmd`, or use the `-Clean` form above).
-
-Typical report from such a machine: Windows 11 (build 26200), `testsigning` off, the trackpad
-connected over Bluetooth, `AmtPtpHidFilter` service present but **Stopped**, the Bluetooth HID
-collection `...VID&0001004C_PID&0324&COL01...` in state **Error**, and the control-device probe
-failing with error 2 - the Microsoft-signed package fixes exactly that.
-
-Symptom of getting this wrong: the panel (or `Diagnose.cmd`) reports
-*"Failed to open device. Error: 2"* because the trackpad never binds to the driver.
+* **Do not enable test signing for this package.** Keep driver signature enforcement on:
+  `bcdedit | findstr /i testsigning` should say nothing or `No`. If it was switched on earlier (for a
+  self-signed build), turn it back off — double-click `Restore-Signature-Enforcement.cmd` and reboot;
+  Secure Boot itself can only be re-enabled in the UEFI/BIOS setup.
+* **VID `27A7` clones** are the only exception: the Microsoft-signed INF does not list them. Such a
+  unit needs a self-signed build from source (`driver\build\make_win10.bat`, patched INF) installed
+  with `install.ps1 -SelfSigned` **and** test signing on. That path is deliberately not shipped.
 
 ## Moving the trackpad to another PC / "Failed to open device. Error: 2"
 

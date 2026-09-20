@@ -1,28 +1,23 @@
-# Prebuilt driver package - Windows 10 x64
+# Optional self-signed driver package - Windows 10 x64
 
-The exact, working package for the Windows 10 streamer PC: the patched
-`AmtPtpDevice.inf` (VID `05AC` **and** `27A7`, Windows 10 section), the
-user-mode WUDF driver, the kernel HID filter and the catalog that ties them
-together.
+Kept for reference and for **VID `27A7` clones**, which the Microsoft-signed
+package does not cover. This variant is self-signed (`MtPtpSigner` /
+`MtRootCA`) and its **kernel** filter only loads when Windows test signing is
+enabled:
+
+```powershell
+bcdedit /set testsigning on      # Secure Boot must be OFF, then reboot
+```
+
+Install it from a release archive with `install.ps1 -SelfSigned` (it trusts the
+certificates in `certs\`). Normal machines should use the Microsoft-signed
+package in `../ms-signed-amd64/` instead - it needs neither test signing nor
+certificates. Turn test signing back off afterwards with
+`Restore-Signature-Enforcement.cmd`.
 
 | File | Notes |
 |---|---|
-| `AmtPtpDevice.inf` | `DriverVer = 09/13/2026,2026.3984.1.1000` |
-| `AmtPtpDevice.cat` | signed by `MtPtpSigner`, issued by `MtRootCA` |
-| `AmtPtpDeviceUsbUm.dll` | user-mode driver (WUDF host) |
-| `AmtPtpHidFilter.sys` | kernel HID filter miniport |
-
-The catalog is **self-signed**: the root must be trusted before Windows will
-accept the package. Both certificates ship in `certs/` and are imported by
-`install.ps1` (or `utility/MtTrackpad.ps1 install`) into `LocalMachine\Root`,
-`\CA` and `\TrustedPublisher`.
-
-Install:
-
-```powershell
-pnputil /add-driver <this folder>\AmtPtpDevice.inf /install
-pnputil /scan-devices
-```
-
-Rebuild from source instead with `driver\build\make_win10.bat`
-(Visual Studio + WDK); see `SETUP-NEW-HOST.md`.
+| `AmtPtpDevice.inf` | patched: VID `27A7` clones + Windows 10 section, `DriverVer 09/13/2026,2026.3984.1.1000` |
+| `AmtPtpDevice.cat` | self-signed by `MtPtpSigner` / `MtRootCA` |
+| `AmtPtpDeviceUsbUm.dll` | user-mode driver (WUDF) |
+| `AmtPtpHidFilter.sys` | kernel HID filter - **requires test signing** |

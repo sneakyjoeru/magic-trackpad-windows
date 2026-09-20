@@ -21,11 +21,14 @@
         -InstallDir <path>   where the control panel is copied
                              (default: %LOCALAPPDATA%\MagicTrackpad)
         -DriverOnly          only trust the certs + install the driver
-        -SignedDriver        install the Microsoft-signed driver package
-                             (driver-ms-signed\) instead of the self-signed one.
-                             Use this when test signing cannot be enabled - the
-                             self-signed kernel filter only loads with
-                             "bcdedit /set testsigning on".
+        -SelfSigned          install a self-signed package from
+                             driver-self-signed\ (if present) and trust the
+                             certificates in certs\. Only needed for VID 27A7
+                             clones, and only with "bcdedit /set testsigning on".
+                             The default (driver\) is Microsoft-signed and needs
+                             neither.
+        -SignedDriver        accepted for compatibility - the Microsoft-signed
+                             package is the default now.
         -Clean               first remove every known Apple/trackpad driver and
                              leftover device instance (clean slate), then install
         -Autostart           add the per-user Run entry (one UAC per logon)
@@ -40,6 +43,7 @@
 param(
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'MagicTrackpad'),
     [switch]$DriverOnly,
+    [switch]$SelfSigned,
     [switch]$SignedDriver,
     [switch]$Clean,
     [switch]$Autostart,
@@ -51,10 +55,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root      = Split-Path -Parent $MyInvocation.MyCommand.Path
-$driverDir = Join-Path $root 'driver'
-if ($SignedDriver) {
-    $signedDir = Join-Path $root 'driver-ms-signed'
-    if (Test-Path $signedDir) { $driverDir = $signedDir }
+$driverDir = Join-Path $root 'driver'          # Microsoft-signed (default)
+if ($SelfSigned) {
+    $selfDir = Join-Path $root 'driver-self-signed'
+    if (Test-Path $selfDir) { $driverDir = $selfDir }
+    else { throw "driver-self-signed\ is not in this package - build it from source (driver\build\make_win10.bat) if you really need the self-signed driver" }
 }
 $certDir   = Join-Path $root 'certs'
 $appName   = 'AmtPtpControlPanel.exe'
@@ -157,8 +162,8 @@ function Install-Driver {
     $existing = @(Get-ExistingDriverPackages)
     $installedKinds = @(Get-InstalledDriverKind)
     # no ternary operator: Windows PowerShell 5.1 does not have one
-    $want = 'self-signed'
-    if ($SignedDriver) { $want = 'microsoft' }
+    $want = 'microsoft'
+    if ($SelfSigned) { $want = 'self-signed' }
     $have = $installedKinds -contains $want
 
     if ($want -eq 'microsoft') {
@@ -289,12 +294,12 @@ function Show-ControlDeviceState {
     $ts = Get-TestSigningState
     $sb = Get-SecureBootState
     Write-Host "    test signing: $ts    secure boot: $sb"
-    if ($ts -ne 'Yes' -and -not $SignedDriver) {
+    if ($SelfSigned -and $ts -ne 'Yes') {
         Write-Host ''
         Write-Host '    *** The self-signed package cannot load its KERNEL driver without test signing.' -ForegroundColor Yellow
-        Write-Host '        Enable it, then reboot:      bcdedit /set testsigning on' -ForegroundColor Yellow
-        Write-Host '        (Secure Boot has to be off for that), or install the Microsoft-signed' -ForegroundColor Yellow
-        Write-Host '        package instead, which needs no test signing:  Install.cmd -SignedDriver' -ForegroundColor Yellow
+        Write-Host '        Enable it, then reboot:  bcdedit /set testsigning on   (Secure Boot off)' -ForegroundColor Yellow
+        Write-Host '        Better: use the Microsoft-signed package (the default) - it needs' -ForegroundColor Yellow
+        Write-Host '        neither test signing nor certificates, but does not cover VID 27A7.' -ForegroundColor Yellow
         Write-Host ''
     }
     Write-Host '    Fix, in order:'
@@ -465,11 +470,11 @@ try {
         }
     }
 
-    if ($SignedDriver) {
-        Write-Step 'Microsoft-signed package selected - no certificate to trust'
-    } else {
-        Write-Step 'trusting the driver certificate(s)'
+    if ($SelfSigned) {
+        Write-Step 'self-signed package selected - trusting its certificate(s)'
         Import-DriverCerts
+    } else {
+        Write-Step 'Microsoft-signed package (default) - no certificate to trust'
     }
 
     Install-Driver

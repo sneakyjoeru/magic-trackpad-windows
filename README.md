@@ -26,14 +26,13 @@ with the additions this repo needs in practice:
 
 That installs the certificates, the driver package, the control panel (to
 `%LOCALAPPDATA%\MagicTrackpad`) and a Start Menu shortcut, then starts the panel.
-`Uninstall.cmd` removes it all again. On Windows 11 / Secure Boot machines where the self-signed
-kernel filter cannot load (panel says *"Failed to open device. Error: 2"*), double-click
-**`Fix-Trackpad-Error2.cmd`** (clean slate + signed driver + device restart in one click; or
-`Install-Microsoft-Signed.cmd` for just the signed driver) instead — it installs the Microsoft-signed driver from
-`driver-ms-signed\` and needs neither test signing nor certificates. Moving the trackpad from another PC (or any
-"Failed to open device. Error: 2" from the panel) is covered by
-`Uninstall-All-Apple-Drivers.cmd` — it clears every known Apple/trackpad driver package and
-leftover device instance first; `Install.cmd -Clean` does both in one pass.
+`Uninstall.cmd` removes it all again.
+
+The shipped driver is **signed by Microsoft**, so no test signing and no certificates are involved and
+Secure Boot stays on. If an older self-signed package is still in the way (the panel says *"Failed to
+open device. Error: 2"*), double-click **`Fix-Trackpad-Error2.cmd`** — clean slate + signed driver +
+device restart in one click. If test signing was ever switched on for a self-signed build, restore
+normal enforcement with **`Restore-Signature-Enforcement.cmd`** (reboot afterwards).
 
 Details, switches, manual steps, verification and troubleshooting:
 **[SETUP-NEW-HOST.md](SETUP-NEW-HOST.md)** and **[INSTALL.txt](INSTALL.txt)**.

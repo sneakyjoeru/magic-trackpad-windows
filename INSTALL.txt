@@ -42,16 +42,19 @@ WHAT IS IN THE ARCHIVE
 
   Install.cmd                  DOUBLE-CLICK THIS - asks for admin rights once and
                                runs install.ps1 (optional arguments are passed on)
+  Restore-Signature-Enforcement.cmd
+                               turns Windows test signing back OFF (reboot
+                               afterwards). Only needed if test signing was
+                               enabled for the self-signed driver variant.
   Fix-Trackpad-Error2.cmd       ONE-CLICK REPAIR for "Failed to open device.
                                Error: 2": removes all old Apple/trackpad drivers,
                                installs the Microsoft-signed package, restarts the
                                trackpad devices so they re-bind, starts the panel
-  Install-Microsoft-Signed.cmd the same, but installs the Microsoft-signed driver
-                               (driver-ms-signed\) - needed on machines where the
-                               self-signed kernel filter cannot load (Windows 11 /
-                               Secure Boot / test signing off). Add -Clean to wipe
-                               old Apple/trackpad drivers first
-  Uninstall.cmd                the reverse: panel, autostart, driver, certificates
+  Install-Microsoft-Signed.cmd kept for compatibility - the Microsoft-signed
+                               driver is the default now, so this behaves like
+                               Install.cmd (use Fix-Trackpad-Error2.cmd when an
+                               old self-signed package is in the way)
+  Uninstall.cmd                the reverse: panel, autostart, driver
   Uninstall-All-Apple-Drivers.cmd
                                clean slate: removes EVERY known Apple / Magic
                                Trackpad driver package and leftover device
@@ -65,17 +68,12 @@ WHAT IS IN THE ARCHIVE
   AmtPtpControlPanel.exe       tray control panel (elevated, single instance)
   README.txt                   what the control panel does, option by option
   INSTALL.txt                  this file
-  driver\AmtPtpDevice.inf      self-signed driver package (VID 05AC + 27A7)
-                               NOTE: its kernel filter needs test signing ON:
-                               bcdedit /set testsigning on   (then reboot)
-  driver-ms-signed\            the same driver, Microsoft-signed - needs no test
-                               signing. Use it if you cannot enable test signing:
-                               install.ps1 -SignedDriver   (or Install.cmd -SignedDriver)
+  driver\AmtPtpDevice.inf      the driver package, SIGNED BY MICROSOFT (Windows
+                               Hardware Compatibility Publisher). Needs no test
+                               signing and no certificates - the default.
   driver\AmtPtpDevice.cat      catalog signed by MtPtpSigner / MtRootCA
   driver\AmtPtpDeviceUsbUm.dll user-mode WUDF driver
   driver\AmtPtpHidFilter.sys   kernel HID filter
-  certs\MtRootCA.cer           root CA that must be trusted for the package
-  certs\MtPtpSigner.cer        the package's signing certificate
   utility\MtTrackpad.ps1       setup / control utility (headless friendly)
   utility\Verify-MtTrackpad.ps1 unattended PASS/FAIL verification
   utility\Remove-MtCerts.ps1   removes the trusted test certificates again
@@ -101,15 +99,11 @@ REQUIREMENTS
 MANUAL INSTALL (if you prefer doing it by hand)
 --------------------------------------------------------------------------------
 
-    # 1. trust the certificates (admin)
-    certutil -addstore -f Root            certs\MtRootCA.cer
-    certutil -addstore -f TrustedPublisher certs\MtPtpSigner.cer
-
-    # 2. import the driver (admin)
+    # 1. import the driver (admin) - it is Microsoft-signed, nothing to trust
     pnputil /add-driver driver\AmtPtpDevice.inf /install
     pnputil /scan-devices
 
-    # 3. start the control panel (accept UAC)
+    # 2. start the control panel (accept UAC)
     .\AmtPtpControlPanel.exe
 
 --------------------------------------------------------------------------------
@@ -162,23 +156,17 @@ The panel says "Failed to open device. Error: 2"
       devices so they leave the Error state). If the trackpad was paired over
       Bluetooth before, remove and re-pair it once afterwards.
 
-      If it still fails, it is almost always the DRIVER SIGNATURE:
-        * this package is SELF-SIGNED, and its kernel driver
-          (AmtPtpHidFilter.sys) only loads when Windows test signing is on.
-          Check with:      bcdedit | findstr /i testsigning
-          Enable + reboot: bcdedit /set testsigning on
-          (Secure Boot has to be OFF for that; Windows will show "Test Mode")
-        * or skip test signing entirely and install the Microsoft-signed package
-          that ships in driver-ms-signed\:
-                 Install-Microsoft-Signed.cmd        (double-click)
-                 Install.cmd -SignedDriver           (same thing)
-          Note: our self-signed INF has the newer DriverVer, so if BOTH packages
-          are installed Windows may keep preferring the one that cannot load -
-          remove the old one first with Uninstall-All-Apple-Drivers.cmd, or use
-          Install-Microsoft-Signed.cmd -Clean.
-          It is signed by Microsoft's Hardware Compatibility Publisher, so it
-          loads on any Windows 10/11 - but it only covers the real Apple vendor
-          IDs (VID 05AC), not the VID 27A7 clones.
+      If it still fails, it is the driver signature or a stuck device:
+        * the shipped package is signed by MICROSOFT and needs no test signing -
+          check that no OLD self-signed package is still installed and winning:
+              Uninstall-All-Apple-Drivers.cmd
+              Install.cmd
+          (or simply double-click Fix-Trackpad-Error2.cmd)
+        * test signing must be OFF on a normal machine. If it was turned on for
+          an earlier self-signed driver, restore it with
+              Restore-Signature-Enforcement.cmd        (reboot afterwards)
+        * did you build the driver yourself?  A self-signed build only loads with
+          test signing on; the Microsoft-signed package in driver\ does not.
 
       The installer also prints the state of every connected trackpad device and
       whether test signing / Secure Boot are on. Diagnose.cmd collects all of it.
