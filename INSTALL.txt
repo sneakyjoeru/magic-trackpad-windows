@@ -50,7 +50,7 @@ WHAT IS IN THE ARCHIVE
                                Error: 2": removes all old Apple/trackpad drivers,
                                installs the Microsoft-signed package, restarts the
                                trackpad devices so they re-bind, starts the panel
-  Install-Microsoft-Signed.cmd kept for compatibility - the Microsoft-signed
+  Install.cmd kept for compatibility - the Microsoft-signed
                                driver is the default now, so this behaves like
                                Install.cmd (use Fix-Trackpad-Error2.cmd when an
                                old self-signed package is in the way)

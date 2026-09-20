@@ -19,12 +19,12 @@ certificates, tray control panel and utilities. Two paths: install the ready-mad
 
 ## Path A — install the ready-made package (recommended)
 
-1. Download `AmtPtpControlPanel-v1.0.7-win64.zip` from
+1. Download `Apple Magic Trackpad Setup Utility + Drivers v1.0` from
    [Releases](../../releases/latest) and extract it (e.g. to `C:\MagicTrackpad`).
    The archive is self-contained:
 
    ```
-   AmtPtpControlPanel-v1.0.7-win64/
+   Apple Magic Trackpad Setup Utility + Drivers v1.0/
      Install.cmd              DOUBLE-CLICK THIS (asks for admin rights once)
      Uninstall.cmd            one-click removal (panel, autostart, driver, certs)
      install.ps1              one-shot installer / uninstaller (the actual steps)
@@ -228,7 +228,7 @@ other Apple trackpad PID needs to be added to the INF and re-signed.
 ## "Starting the panel does nothing"
 
 The panel is single-instance and lives in the notification area. If the installer already started
-it, a second launch used to exit silently. Since v1.0.11 a second launch **brings the running
+it, a second launch used to exit silently. Since v1.0 a second launch **brings the running
 instance's window up** (and tells you in a message box if the instance is an older build that
 cannot listen). If no window and no tray icon appear at all, run
 
@@ -239,7 +239,7 @@ cannot listen). If no window and no tray icon appear at all, run
 and send `MagicTrackpad-diagnose.txt`: it lists the process, every window of it (visible or not),
 the per-user settings and autostart entry, the installed panel copies, the driver packages, the
 trackpad devices, the control-device probe result, third-party trackpad tools, and the startup
-error log (`%LOCALAPPDATA%\MagicTrackpad\panel-error.log`, written by v1.0.11+ if the panel ever
+error log (`%LOCALAPPDATA%\MagicTrackpad\panel-error.log`, written by v1.0+ if the panel ever
 fails to start).
 
 ## Troubleshooting
