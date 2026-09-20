@@ -90,7 +90,14 @@ namespace AmtPtpControlPanel
             {
                 ctlBatteryProgressBar.DisplayType = ProgressBarWithPercentage.TextDisplayType.Percent;
                 ctlBatteryProgressBar.Value = (int)level;
-                ctlBatteryGroupBox.Text = "Battery (only Bluetooth): --- LAST UPDATED: " + DateTime.Now.ToString();
+                ctlBatteryGroupBox.Text = "Battery: " + level + " % (Bluetooth only, read "
+                        + DateTime.Now.ToString("HH:mm:ss") + ")";
+            }
+            else
+            {
+                ctlBatteryProgressBar.DisplayType = ProgressBarWithPercentage.TextDisplayType.Manual;
+                ctlBatteryProgressBar.ManualText = "no reading";
+                ctlBatteryGroupBox.Text = "Battery: no reading (USB mode or driver busy)";
             }
         }
 
@@ -180,6 +187,10 @@ namespace AmtPtpControlPanel
 
             if (palmRejection != 0)
                 ctlPalmRejection.Checked = true;
+
+            // read the battery immediately when the window opens instead of
+            // waiting for the user to press "Update Battery"
+            ctlBatteryUpdate_Click(this, EventArgs.Empty);
         }
 
         private bool SaveSettings()

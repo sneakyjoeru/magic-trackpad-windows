@@ -25,6 +25,8 @@ namespace AmtPtpControlPanel
         private System.Windows.Forms.Timer trayTimer;
         private int lastBatteryPercent = -1;
         private System.DateTime lastUiRefresh = System.DateTime.MinValue;
+        private System.Windows.Forms.Timer earlyUiTimer;
+        private int earlyUiTicks;
         private bool hiddenOnStartup = false;
         private bool trayExitRequested = false;
         private int trayCloseCount = 0;
@@ -228,6 +230,27 @@ namespace AmtPtpControlPanel
                 miOpen.ToolTipText = "Brings up the main settings window.";
                 miOpen.Click += (s, e) => RestoreFromTray();
 
+                // Windows 11 hides the text next to tray icons by default and
+                // offers no API to force it - this opens the system page where
+                // the per-icon "show label" switch lives
+                ToolStripMenuItem miShowLabel =
+                    new ToolStripMenuItem("Show label next to the tray icon...");
+                miShowLabel.ToolTipText =
+                    "Windows 11 hides the small text next to tray icons by default. " +
+                    "This opens the system settings page where you can switch the " +
+                    "label on for the Magic Trackpad icon - the label then shows the " +
+                    "live percentage (the icon itself already shows the number).";
+                miShowLabel.Click += (s, e) =>
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start("ms-settings:notifications");
+                    }
+                    catch
+                    {
+                    }
+                };
+
                 ToolStripMenuItem miExit = new ToolStripMenuItem("Exit");
                 miExit.ToolTipText =
                     "Stops the app and removes the tray icon. Your options are saved " +
@@ -247,6 +270,7 @@ namespace AmtPtpControlPanel
                 trayMenu.Items.Add(miStartMin);
                 trayMenu.Items.Add(new ToolStripSeparator());
                 trayMenu.Items.Add(miOpen);
+                trayMenu.Items.Add(miShowLabel);
                 trayMenu.Items.Add(miExit);
 
                 // settings-window twin of the menu option (bidirectional sync)
@@ -289,6 +313,26 @@ namespace AmtPtpControlPanel
                 trayTimer.Start();
 
                 RefreshTray();
+
+                // right after launch the device sometimes does not answer
+                // yet (driver start-up, UAC relay hand-over), so a single
+                // initial read would leave "Battery: ..." for up to 5 s;
+                // force fresh reads at 1, 2 and 3 seconds after launch
+                earlyUiTicks = 0;
+                earlyUiTimer = new System.Windows.Forms.Timer();
+                earlyUiTimer.Interval = 1000;
+                earlyUiTimer.Tick += (s, e) =>
+                {
+                    earlyUiTicks++;
+                    RefreshTray();
+                    if (earlyUiTicks >= 3)
+                    {
+                        earlyUiTimer.Stop();
+                        earlyUiTimer.Dispose();
+                        earlyUiTimer = null;
+                    }
+                };
+                earlyUiTimer.Start();
             }
             catch
             {
@@ -353,30 +397,33 @@ namespace AmtPtpControlPanel
                     if (lastBatteryPercent >= 0)
                     {
                         miBatteryItem.Text = "Battery: " + lastBatteryPercent + " %";
-                        // the icon itself changes with the charge level, so the
-                        // state is visible even where Windows 11 hides the small
-                        // label next to tray icons; Text doubles as the hover
-                        // tooltip with the exact number
+                        // the toggle item carries the live number too, so the
+                        // "Show battery percentage in tray" wording is always
+                        // followed by the value
+                        miShowBattery.Text = "Show battery percentage in tray - "
+                                + lastBatteryPercent + " %";
+                        // the icon is the number itself
                         if (PickBatteryIcon(lastBatteryPercent) != null)
                             trayIcon.Icon = PickBatteryIcon(lastBatteryPercent);
-                        // the tooltip repeats the exact menu phrasing, so the
-                        // full "Show battery percentage in tray" wording is
-                        // visible right in the tray on hover
-                        trayIcon.Text = "Show battery percentage in tray - "
-                                + lastBatteryPercent + " %";
+                        // short Text on purpose: on Windows 11 this string is
+                        // what the tray shows NEXT TO the icon once the icon's
+                        // "show label" option is enabled
+                        trayIcon.Text = lastBatteryPercent + "%";
                     }
                     else
                     {
                         miBatteryItem.Text = "Battery: not available";
+                        miShowBattery.Text = "Show battery percentage in tray - "
+                                + "no reading (USB mode)";
                         if (iconNa != null)
                             trayIcon.Icon = iconNa;
-                        trayIcon.Text = "Show battery percentage in tray - "
-                                + "no reading in USB mode";
+                        trayIcon.Text = "no reading";
                     }
                 }
                 else
                 {
                     miBatteryItem.Text = "Battery: off";
+                    miShowBattery.Text = "Show battery percentage in tray";
                     if (iconBase16 != null)
                         trayIcon.Icon = iconBase16;
                     trayIcon.Text = "Magic Trackpad";
