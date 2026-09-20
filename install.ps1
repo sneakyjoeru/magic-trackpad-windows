@@ -73,6 +73,7 @@ $runKey    = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $runValue  = 'Magic Trackpad'
 
 function Write-Step($text) { Write-Host "==> $text" -ForegroundColor Cyan }
+function Write-Info($text) { Write-Host "    $text" }
 function Write-Ok($text)   { Write-Host "    OK   $text" -ForegroundColor Green }
 function Write-Warn2($text){ Write-Host "    WARN $text" -ForegroundColor Yellow }
 
@@ -309,8 +310,9 @@ function Show-ControlDeviceState {
     Write-Host '    Fix, in order:'
     Write-Host '      1. unplug the USB-C cable and plug it back in (or remove + re-pair Bluetooth), then run this installer again'
     Write-Host '      2. reboot once - a WUDF host or a stale device instance can be stuck'
-    Write-Host '      3. run Uninstall-All-Apple-Drivers.cmd (removes every old Apple / trackpad'
-    Write-Host '         driver and ghost device), then Install.cmd again - or run Install.cmd -Clean'
+    Write-Host '      3. with the trackpad attached, run Install.cmd again: it repairs old Apple /'
+    Write-Host '         self-signed drivers and restarts the device by itself (or use -Clean for a'
+    Write-Host '         forced clean slate)'
     Write-Host '      4. if it still fails, the device list above is what we need: the hardware IDs'
     Write-Host '         may not be covered by the driver INF'
     return $false
