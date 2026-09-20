@@ -30,8 +30,9 @@
                              clones, and only with "bcdedit /set testsigning on".
                              The default (driver\) is Microsoft-signed and needs
                              neither.
-        -SignedDriver        accepted for compatibility - the Microsoft-signed
-                             package is the default now.
+        -NoRepair            do not run the automatic repair (old Apple/self-signed
+                             drivers removed, devices restarted) when the driver
+                             does not come up. The repair runs by default.
         -Clean               first remove every known Apple/trackpad driver and
                              leftover device instance (clean slate), then install
         -Autostart           add the per-user Run entry (one UAC per logon)
@@ -47,8 +48,8 @@ param(
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'MagicTrackpad'),
     [switch]$DriverOnly,
     [switch]$SelfSigned,
-    [switch]$SignedDriver,
     [switch]$Clean,
+    [switch]$NoRepair,
     [switch]$Autostart,
     [switch]$StartMinimized,
     [switch]$SkipLaunch,
@@ -315,6 +316,32 @@ function Show-ControlDeviceState {
     return $false
 }
 
+function Invoke-DriverRepair {
+    # Automatic repair, part of every install: wipe every Apple / Magic
+    # Trackpad driver package and leftover device instance,
+    # device instance, install the shipped (Microsoft-signed) package and
+    # restart the trackpad devices so Windows really re-binds them.
+    Write-Host ''
+    Write-Host '==> the driver is not working yet - running the automatic repair' -ForegroundColor Yellow
+    $cleanup = Join-Path $root 'Uninstall-All-Apple-Drivers.ps1'
+    if (Test-Path $cleanup) {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $cleanup
+        Write-Host ''
+    } else {
+        Write-Warn2 "cleanup helper not found at $cleanup - removing packages directly"
+        foreach ($pkg in @(Get-ExistingDriverPackages)) {
+            & pnputil.exe /delete-driver $pkg /uninstall /force 2>&1 | ForEach-Object { Write-Info $_ }
+        }
+    }
+
+    Install-Driver
+    Show-DeviceState | Out-Null
+    Restart-TrackpadDevices | Out-Null
+    Write-Host ''
+    Write-Host '==> re-checking after the repair' -ForegroundColor Cyan
+    return (Test-ControlDevice).Ok
+}
+
 function Show-DeviceState {
     Write-Step 'trackpad device state'
     # pnputil is used instead of Get-PnpDevice: the CIM-based cmdlet reports a
@@ -515,6 +542,20 @@ try {
         if (Restart-TrackpadDevices) {
             Write-Step 're-checking the driver control device'
             $ctrlOk = Show-ControlDeviceState
+        }
+    }
+    if (-not $ctrlOk -and -not $NoRepair) {
+        # a trackpad is attached but the driver is not up (typical after moving
+        # the unit from a machine that had Apple's or an older self-signed
+        # driver) - repair instead of just complaining
+        $attached = @(Get-ConnectedTrackpadDevices).Count -gt 0
+        $foreign = @(Get-InstalledDriverKind | Where-Object { $_ -ne 'microsoft' }).Count -gt 0
+        if ($attached -or $foreign) {
+            if (Invoke-DriverRepair) {
+                $ctrlOk = Show-ControlDeviceState
+            }
+        } else {
+            Write-Info 'no trackpad attached - nothing to bind, error 2 is expected until you connect it'
         }
     }
 

@@ -1,10 +1,12 @@
-AmtPtpControlPanel - tray control panel for the Magic Trackpad (v1.0.7)
-=========================================================================
+Apple Magic Trackpad Setup Utility + Drivers v1.0
+=================================================
 
 WHAT THIS IS
-  The system-tray companion for the Magic Trackpad Windows driver (see
-  INSTALL.txt for the complete package: driver, certificates, utilities,
-  installer). It contains the full vendor control panel plus:
+  The tray control panel and driver installer for the Apple Magic Trackpad on
+  Windows. Everything needed is in this folder (see INSTALL.txt): the driver,
+  the installer, the panel and the maintenance tools.
+
+  It contains the full vendor control panel plus:
 
   * Battery percentage, visible without hovering
       - the tray icon itself is the number (large digits coloured by level:
@@ -14,8 +16,10 @@ WHAT THIS IS
         "Show battery percentage in tray - 100 %";
       - the tray icon's Text/label is the short value ("100%"), which Windows
         shows next to the icon where that per-icon label option exists;
-      - refreshes every 5 s, immediately at launch (retries at 1/2/3 s) and
-        whenever the settings window is opened or re-focused.
+      - refreshes every 5 s while the settings window is focused, immediately at
+        launch (retries at 1/2/3 s), whenever the window is opened or re-focused
+        and whenever the tray menu is opened; while the app sits unfocused in
+        the tray it reads once every 10 minutes.
       - Bluetooth only: over the USB-C cable the trackpad is powered by the
         cable and reports no level - the icon then shows a grey "?".
 
@@ -81,7 +85,49 @@ BUILD IT YOURSELF
 
 LICENSE
   Part of the magic-trackpad-windows repository. The tray extensions (tray
-  plumbing, battery reader, tooltips, elevation relay) are
-  MIT licensed. The vendored panel forms (Main.cs / Main.Designer.cs) derive
-  from the upstream MagicTrackpad2ForWindows project (GPLv2) - see
-  driver/LICENSE.
+  plumbing, battery reader, tooltips, elevation relay) are MIT licensed.
+  The vendored panel forms (Main.cs / Main.Designer.cs) derive from the
+  upstream MagicTrackpad2ForWindows project (GPLv2) - see driver/LICENSE.
+
+CREDITS AND ATTRIBUTION
+  This package is a thin layer on top of other people's work - the driver, the
+  control panel and the haptic protocol all come from the projects below:
+
+    * vitoplantamura/MagicTrackpad2ForWindows - the driver this package ships
+      and builds on (user-mode WUDF driver + kernel HID filter, Bluetooth
+      support, original control panel), GPLv2.
+    * imbushuo/mac-precision-touchpad (Bingxing Wang) - the original Magic
+      Trackpad 2 Windows driver that the project above forks.
+    * 1Revenger1 - PR #533 to the imbushuo repo (near-field fingers fix, code
+      cleanup, interrupt-path QueryPerformanceCounter removal).
+    * dos1 - reverse engineering behind the haptic feedback control messages.
+    * Landlogic IT - Microsoft Hardware Dashboard access and upstream driver
+      package signing.
+    * @ordens, Taylor Sharp, @Wikiwix, @nagromc, @danspel, Qiao Zeyu,
+      Purasu Oy, Patrick Adler - contributions to the upstream EV
+      code-signing certificate.
+    * lostindark/DriverStoreExplorer - recommended driver-store cleanup tool.
+    * Apple - the hardware; "Magic Trackpad" is an Apple trademark. This
+      project is not affiliated with or endorsed by Apple.
+
+  The additions in this package (tray plumbing, battery reader, elevation
+  relay, installer, diagnostics) are MIT licensed; the vendored panel forms
+  derive from the upstream project (GPLv2) - see driver/LICENSE.
+
+  (Original credits block, kept for reference:)
+    * vitoplantamura/MagicTrackpad2ForWindows - the driver this package is
+      built on (user-mode WUDF driver + kernel HID filter, Bluetooth support,
+      original control panel), GPLv2.
+    * imbushuo/mac-precision-touchpad (Bingxing Wang) - the original Magic
+      Trackpad 2 Windows driver that the project above forks.
+    * 1Revenger1 - PR #533 to the imbushuo repo (near-field fingers fix, code
+      cleanup, interrupt-path QueryPerformanceCounter removal).
+    * dos1 - reverse engineering behind the haptic feedback control messages.
+    * Landlogic IT - Microsoft Hardware Dashboard access and upstream driver
+      package signing.
+    * @ordens, Taylor Sharp, @Wikiwix, @nagromc, @danspel, Qiao Zeyu,
+      Purasu Oy, Patrick Adler - contributions to the upstream EV
+      code-signing certificate.
+    * lostindark/DriverStoreExplorer - recommended driver-store cleanup tool.
+    * Apple - the hardware; "Magic Trackpad" is an Apple trademark. This
+      project is not affiliated with or endorsed by Apple.

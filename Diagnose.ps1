@@ -184,9 +184,9 @@ public class MtCd {
             'verdict     : the trackpad is not bound to this driver. Check, in order:'
             '  1. test signing (see the section above) - without it the self-signed'
             '     kernel filter never loads: bcdedit /set testsigning on + reboot'
-            '     (Secure Boot off), or install driver-ms-signed\ (Install.cmd -SignedDriver)'
+            '     (Secure Boot off). The shipped driver is Microsoft-signed, so a plain'
             '  2. replug the trackpad, then reboot - stale device instances'
-            '  3. Uninstall-All-Apple-Drivers.cmd, replug, reboot, Install.cmd'
+            '  3. run Install.cmd again - it repairs old/self-signed drivers by itself'
             '  4. the hardware ID may not be in the INF - see the device list above'
         }
     }

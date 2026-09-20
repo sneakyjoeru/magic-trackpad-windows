@@ -1,9 +1,14 @@
-Magic Trackpad for Windows - complete package
-=============================================
+Apple Magic Trackpad Setup Utility + Drivers v1.0
+=================================================
 
-This archive contains EVERYTHING needed on a fresh Windows host: the driver
-package, the code-signing certificates it needs, the tray control panel and
-the PowerShell utilities. One script installs all of it.
+This archive contains EVERYTHING needed on a fresh Windows host: the
+Microsoft-signed driver package, the tray control panel and the PowerShell
+utilities. One click installs all of it.
+
+Attribution: the driver, the control panel and the haptic protocol come from
+vitoplantamura/MagicTrackpad2ForWindows and imbushuo/mac-precision-touchpad
+(and the contributors listed in README.txt); this package adds the tray
+extensions, the installer and the maintenance tools.
 
 --------------------------------------------------------------------------------
 QUICK START (new host, 3 steps)
@@ -42,14 +47,6 @@ WHAT IS IN THE ARCHIVE
 
   Install.cmd                  DOUBLE-CLICK THIS - asks for admin rights once and
                                runs install.ps1 (optional arguments are passed on)
-  Fix-Trackpad-Error2.cmd       ONE-CLICK REPAIR for "Failed to open device.
-                               Error: 2": removes all old Apple/trackpad drivers,
-                               installs the Microsoft-signed package, restarts the
-                               trackpad devices so they re-bind, starts the panel
-  Install.cmd kept for compatibility - the Microsoft-signed
-                               driver is the default now, so this behaves like
-                               Install.cmd (use Fix-Trackpad-Error2.cmd when an
-                               old self-signed package is in the way)
   Uninstall.cmd                the reverse: panel, autostart, driver
   Uninstall-All-Apple-Drivers.cmd
                                clean slate: removes EVERY known Apple / Magic
@@ -147,9 +144,11 @@ The panel says "Failed to open device. Error: 2"
            then Install.cmd; Install.cmd -Clean does 3 + install in one pass.
 
       Bluetooth trackpad on Windows 11 (build 22000+) with Secure Boot?
-      Then it is the driver signature - see below. Quickest fix: double-click
-      Fix-Trackpad-Error2.cmd and let it finish (it also restarts the trackpad
-      devices so they leave the Error state). If the trackpad was paired over
+      Then it is the driver signature - see below. Just run Install.cmd again:
+      when a trackpad is attached and the driver does not come up, the installer
+      repairs the machine by itself (removes every old Apple / self-signed
+      driver package and leftover device instance, installs the Microsoft-signed
+      driver and restarts the trackpad devices). If the trackpad was paired over
       Bluetooth before, remove and re-pair it once afterwards.
 
       If it still fails, it is the driver signature or a stuck device:
@@ -157,7 +156,7 @@ The panel says "Failed to open device. Error: 2"
           check that no OLD self-signed package is still installed and winning:
               Uninstall-All-Apple-Drivers.cmd
               Install.cmd
-          (or simply double-click Fix-Trackpad-Error2.cmd)
+          (a plain Install.cmd does this automatically)
         * test signing must be OFF on a normal machine. If it was turned on for
           an earlier self-signed driver, turn it back off and reboot:
               bcdedit /set testsigning off

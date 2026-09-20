@@ -220,8 +220,8 @@ uninstall **Magic Utilities** and **Trackpad++** through *Apps & features*
 before installing this driver. The cleanup script reports them if it finds them.
 
 If the control device is still missing afterwards, check `bcdedit | findstr /i testsigning`
-(lines 1-2 of the list above) and use `-SignedDriver` if it says `No` — then send the device list
-the installer prints: the driver INF covers `USB\VID_05AC&PID_0324`,
+(lines 1-2 of the list above) — a plain `Install.cmd` already handles the signed/unsigned and
+stale-package cases by itself — then send the device list the installer prints: the driver INF covers `USB\VID_05AC&PID_0324`,
 `USB\VID_27A7&PID_2501/9601` and the Bluetooth HID form of `PID_0324`; any
 other Apple trackpad PID needs to be added to the INF and re-signed.
 
