@@ -25,7 +25,9 @@ certificates, tray control panel and utilities. Two paths: install the ready-mad
 
    ```
    AmtPtpControlPanel-v1.0.7-win64/
-     install.ps1              one-shot installer / uninstaller
+     Install.cmd              DOUBLE-CLICK THIS (asks for admin rights once)
+     Uninstall.cmd            one-click removal (panel, autostart, driver, certs)
+     install.ps1              one-shot installer / uninstaller (the actual steps)
      AmtPtpControlPanel.exe   tray control panel
      README.txt               what the panel does
      INSTALL.txt              switches, manual steps, troubleshooting
@@ -34,11 +36,10 @@ certificates, tray control panel and utilities. Two paths: install the ready-mad
      utility/                 MtTrackpad.ps1, Verify-MtTrackpad.ps1, Remove-MtCerts.ps1
    ```
 
-2. Open an **admin PowerShell** in that folder and run:
-
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File .\install.ps1
-   ```
+2. **Double-click `Install.cmd`** and confirm the single UAC prompt — there is
+   nothing to type.
+   The equivalent from a console is
+   `powershell -ExecutionPolicy Bypass -File .\install.ps1`.
 
    The installer
 
@@ -186,9 +187,8 @@ started.
 
 ## Uninstall
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall
-```
+Double-click **`Uninstall.cmd`** (or run
+`powershell -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall`).
 
 Removes the panel folder, the autostart entry, the imported driver package and the trusted
 certificates. (`utility\Remove-MtCerts.ps1` removes the certificates only.) Log off and on to

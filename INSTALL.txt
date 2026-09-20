@@ -12,11 +12,14 @@ QUICK START (new host, 3 steps)
 1. Extract this folder anywhere, e.g. C:\MagicTrackpad
    (do not run it from inside the ZIP).
 
-2. Open an ADMIN PowerShell in that folder and run:
+2. Double-click   Install.cmd
+   Windows shows one UAC prompt - confirm it. Nothing else to type or click.
+
+   Prefer a console? The same thing from any prompt:
 
        powershell -ExecutionPolicy Bypass -File .\install.ps1
 
-3. Accept the UAC prompt. The script
+3. The installer
 
        - trusts the driver certificate(s) from .\certs
        - imports the driver package from .\driver  (pnputil /add-driver /install)
@@ -37,7 +40,10 @@ Useful switches:
 WHAT IS IN THE ARCHIVE
 --------------------------------------------------------------------------------
 
-  install.ps1                  one-shot installer / uninstaller (this file's steps)
+  Install.cmd                  DOUBLE-CLICK THIS - asks for admin rights once and
+                               runs install.ps1 (optional arguments are passed on)
+  Uninstall.cmd                the reverse: panel, autostart, driver, certificates
+  install.ps1                  one-shot installer / uninstaller (the actual steps)
   AmtPtpControlPanel.exe       tray control panel (elevated, single instance)
   README.txt                   what the control panel does, option by option
   INSTALL.txt                  this file
@@ -121,7 +127,11 @@ Nothing happens on double-click / a second launch does not appear
 UNINSTALL
 --------------------------------------------------------------------------------
 
+       Uninstall.cmd
+
+or, on the command line:
+
        powershell -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall
 
-removes the panel folder, the autostart entry, the imported driver package
+It removes the panel folder, the autostart entry, the imported driver package
 and the two certificates again. (Log off/on afterwards to drop the tray icon.)

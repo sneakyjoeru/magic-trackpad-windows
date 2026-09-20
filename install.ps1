@@ -24,6 +24,7 @@
         -Autostart           add the per-user Run entry (one UAC per logon)
         -StartMinimized      with -Autostart: start straight into the tray
         -SkipLaunch          do not start the control panel at the end
+        -NoShortcuts         do not create the Start Menu shortcut
         -Uninstall           remove app + autostart + driver + certificates
 
     Exit code 0 = success, 1 = a step failed (details on the console).
@@ -35,6 +36,7 @@ param(
     [switch]$Autostart,
     [switch]$StartMinimized,
     [switch]$SkipLaunch,
+    [switch]$NoShortcuts,
     [switch]$Uninstall
 )
 
@@ -172,6 +174,41 @@ function Install-App {
         $p = Join-Path $root $doc
         if (Test-Path $p) { Copy-Item $p $InstallDir -Force }
     }
+    if (-not $NoShortcuts) {
+        $exe = Join-Path $InstallDir $appName
+        $link = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Magic Trackpad.lnk'
+        New-Shortcut -LinkPath $link -TargetPath $exe `
+            -Description 'Magic Trackpad control panel (runs with administrator rights)' `
+            -IconPath "$exe,0"
+        Write-Ok "Start Menu shortcut: $link"
+    }
+}
+
+function New-Shortcut {
+    param(
+        [string]$LinkPath,
+        [string]$TargetPath,
+        [string]$Description = '',
+        [string]$IconPath = ''
+    )
+    $parent = Split-Path -Parent $LinkPath
+    if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+    $shell = New-Object -ComObject WScript.Shell
+    $lnk = $shell.CreateShortcut($LinkPath)
+    $lnk.TargetPath = $TargetPath
+    $lnk.WorkingDirectory = (Split-Path -Parent $TargetPath)
+    if ($Description) { $lnk.Description = $Description }
+    if ($IconPath)    { $lnk.IconLocation = $IconPath }
+    $lnk.Save()
+    # set the "run as administrator" flag (byte 0x15, bit 0x20) so launching
+    # the panel from the Start Menu goes straight to the elevated copy
+    try {
+        $bytes = [IO.File]::ReadAllBytes($LinkPath)
+        if ($bytes.Length -gt 0x15) {
+            $bytes[0x15] = $bytes[0x15] -bor 0x20
+            [IO.File]::WriteAllBytes($LinkPath, $bytes)
+        }
+    } catch { }
 }
 
 function Set-Autostart {

@@ -27,6 +27,11 @@ namespace AmtPtpControlPanel
         private System.DateTime lastUiRefresh = System.DateTime.MinValue;
         private System.Windows.Forms.Timer earlyUiTimer;
         private int earlyUiTicks;
+        // polling cadence: fast while the user is looking at the app, slow
+        // (10 min) while it just sits in the tray unfocused - opening the
+        // tray menu or focusing the window refreshes immediately anyway
+        private const int TrayActiveIntervalMs = 5000;
+        private const int TrayIdleIntervalMs = 600000;
         private bool hiddenOnStartup = false;
         private bool trayExitRequested = false;
         private int trayCloseCount = 0;
@@ -72,6 +77,7 @@ namespace AmtPtpControlPanel
                         trayIcon.BalloonTipTitle = "Magic Trackpad";
                         trayIcon.BalloonTipText = "Window hidden - the app now lives in the tray icon (right-click it). Press the window close button a second time or use 'Exit' in the icon menu to really quit.";
                         trayIcon.ShowBalloonTip(5000);
+                        SetTrayInterval(TrayIdleIntervalMs);
                         e.Cancel = true;
                     }
                 }
@@ -85,6 +91,9 @@ namespace AmtPtpControlPanel
             // this can never race with the 5 s background refresh
             this.Activated += (s, e) =>
             {
+                // the user is looking at the app again: back to the fast
+                // cadence and one immediate, fresh reading
+                SetTrayInterval(TrayActiveIntervalMs);
                 if ((System.DateTime.Now - lastUiRefresh)
                         .TotalMilliseconds > 1000)
                 {
@@ -92,6 +101,9 @@ namespace AmtPtpControlPanel
                     RefreshTray();
                 }
             };
+            // unfocused: the percentage is not being watched, so drop to one
+            // read every 10 minutes instead of every 5 seconds
+            this.Deactivate += (s, e) => SetTrayInterval(TrayIdleIntervalMs);
         }
 
         protected override void OnShown(EventArgs e)
@@ -242,6 +254,9 @@ namespace AmtPtpControlPanel
                 };
 
                 ContextMenuStrip trayMenu = new ContextMenuStrip();
+                // the menu always shows a value read right now, which is why
+                // the background cadence can be slow while unfocused
+                trayMenu.Opening += (s, e) => RefreshTray();
                 trayMenu.Items.Add(miBatteryItem);
                 trayMenu.Items.Add(new ToolStripSeparator());
                 trayMenu.Items.Add(miShowBattery);
@@ -286,7 +301,8 @@ namespace AmtPtpControlPanel
                 trayIcon.Visible = true;
 
                 trayTimer = new System.Windows.Forms.Timer();
-                trayTimer.Interval = 5000;
+                trayTimer.Interval = hiddenOnStartup
+                        ? TrayIdleIntervalMs : TrayActiveIntervalMs;
                 trayTimer.Tick += (s, e) => RefreshTray();
                 trayTimer.Start();
 
@@ -353,6 +369,20 @@ namespace AmtPtpControlPanel
                 WindowState = FormWindowState.Normal;
                 ShowInTaskbar = true;
                 Activate();
+            }
+            catch
+            {
+            }
+        }
+
+        private void SetTrayInterval(int ms)
+        {
+            try
+            {
+                if (trayTimer == null)
+                    return;
+                if (trayTimer.Interval != ms)
+                    trayTimer.Interval = ms;
             }
             catch
             {
