@@ -13,7 +13,7 @@ Install it from a release archive with `install.ps1 -SelfSigned` (it trusts the
 certificates in `certs\`). Normal machines should use the Microsoft-signed
 package in `../ms-signed-amd64/` instead - it needs neither test signing nor
 certificates. Turn test signing back off afterwards with
-`Restore-Signature-Enforcement.cmd`.
+`bcdedit /set testsigning off` and a reboot.
 
 | File | Notes |
 |---|---|

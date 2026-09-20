@@ -42,10 +42,6 @@ WHAT IS IN THE ARCHIVE
 
   Install.cmd                  DOUBLE-CLICK THIS - asks for admin rights once and
                                runs install.ps1 (optional arguments are passed on)
-  Restore-Signature-Enforcement.cmd
-                               turns Windows test signing back OFF (reboot
-                               afterwards). Only needed if test signing was
-                               enabled for the self-signed driver variant.
   Fix-Trackpad-Error2.cmd       ONE-CLICK REPAIR for "Failed to open device.
                                Error: 2": removes all old Apple/trackpad drivers,
                                installs the Microsoft-signed package, restarts the
@@ -163,8 +159,8 @@ The panel says "Failed to open device. Error: 2"
               Install.cmd
           (or simply double-click Fix-Trackpad-Error2.cmd)
         * test signing must be OFF on a normal machine. If it was turned on for
-          an earlier self-signed driver, restore it with
-              Restore-Signature-Enforcement.cmd        (reboot afterwards)
+          an earlier self-signed driver, turn it back off and reboot:
+              bcdedit /set testsigning off
         * did you build the driver yourself?  A self-signed build only loads with
           test signing on; the Microsoft-signed package in driver\ does not.
 

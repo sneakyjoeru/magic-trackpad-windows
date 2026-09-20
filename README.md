@@ -32,8 +32,8 @@ That installs the **Microsoft-signed** driver package, copies the control panel 
 The shipped driver is **signed by Microsoft**, so no test signing and no certificates are involved and
 Secure Boot stays on. If an older self-signed package is still in the way (the panel says *"Failed to
 open device. Error: 2"*), double-click **`Fix-Trackpad-Error2.cmd`** — clean slate + signed driver +
-device restart in one click. If test signing was ever switched on for a self-signed build, restore
-normal enforcement with **`Restore-Signature-Enforcement.cmd`** (reboot afterwards).
+device restart in one click. If test signing was ever switched on for a self-signed build,
+turn it back off with `bcdedit /set testsigning off` and reboot.
 
 Details, switches, manual steps, verification and troubleshooting:
 **[SETUP-NEW-HOST.md](SETUP-NEW-HOST.md)** and **[INSTALL.txt](INSTALL.txt)**.
@@ -81,7 +81,6 @@ magic-trackpad-windows/
 ├── install.ps1                  one-shot installer (what Install.cmd calls)
 ├── Install.cmd / Uninstall.cmd  double-click entry points (self-elevating)
 ├── Fix-Trackpad-Error2.cmd      one-click repair (clean + signed driver + restart)
-├── Restore-Signature-Enforcement.cmd  turns Windows test signing back off
 ├── Uninstall-All-Apple-Drivers.cmd  clean slate: removes every Apple trackpad driver
 ├── Diagnose.cmd                 writes a full diagnostic report
 ├── SETUP-NEW-HOST.md            full setup guide for a fresh machine

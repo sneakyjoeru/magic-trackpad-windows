@@ -176,8 +176,8 @@ MT2 PIDs).
 
 * **Do not enable test signing for this package.** Keep driver signature enforcement on:
   `bcdedit | findstr /i testsigning` should say nothing or `No`. If it was switched on earlier (for a
-  self-signed build), turn it back off — double-click `Restore-Signature-Enforcement.cmd` and reboot;
-  Secure Boot itself can only be re-enabled in the UEFI/BIOS setup.
+  self-signed build), turn it back off with `bcdedit /set testsigning off` and reboot; Secure Boot
+  itself can only be re-enabled in the UEFI/BIOS setup.
 * **VID `27A7` clones** are the only exception: the Microsoft-signed INF does not list them. Such a
   unit needs a self-signed build from source (`driver\build\make_win10.bat`, patched INF) installed
   with `install.ps1 -SelfSigned` **and** test signing on. That path is deliberately not shipped.
