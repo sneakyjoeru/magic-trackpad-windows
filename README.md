@@ -67,6 +67,9 @@ Tray control panel (right‑click the tray icon):
   it again does **not** exit silently: the running instance is asked to bring its window up, so
   double-clicking the shortcut always shows the settings (and an old instance is reported in a
   message box instead).
+- **Tray-first window behaviour**: minimizing hides the window in the tray (no taskbar card), and
+  so does closing it. With *Start hidden in system tray* selected the X button only ever hides -
+  quitting is the tray menu's *Exit*; without it the first X hides and a second one quits.
 
 ## Devices
 

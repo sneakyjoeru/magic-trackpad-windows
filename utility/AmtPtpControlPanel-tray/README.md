@@ -54,8 +54,10 @@ same driver configuration. *Apply* hot‑reloads the driver — no reboot.
    - **Start with Windows** — per‑user Run entry; one UAC prompt per logon.
    - **Start minimized** — begin in the tray without opening the window.
    - **Exit** — stop the app.
-3. Closing the settings window with the X button does **not** stop the app: the first
-   close parks it in the tray (a balloon says so). Use *Exit* to really stop it.
+3. Minimizing hides the window in the tray icon - no taskbar card is left behind. Closing
+   behaves the same (the app keeps running): with *Start hidden in system tray* the X button
+   always just hides it, otherwise the first X hides and a second one quits. Use *Exit* in the
+   tray menu to stop it at any time; starting the app again reopens the existing window.
 
 ## Building
 
