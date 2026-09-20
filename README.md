@@ -25,8 +25,8 @@ with the additions this repo needs in practice:
    [Releases](../../releases/latest) and extract it.
 2. Double‑click **`Install.cmd`** and confirm the UAC prompt.
 
-That installs the certificates, the driver package, the control panel (to
-`%LOCALAPPDATA%\MagicTrackpad`) and a Start Menu shortcut, then starts the panel.
+That installs the **Microsoft-signed** driver package, copies the control panel to
+`%LOCALAPPDATA%\MagicTrackpad`, adds a Start Menu shortcut and starts the panel.
 `Uninstall.cmd` removes it all again.
 
 The shipped driver is **signed by Microsoft**, so no test signing and no certificates are involved and
