@@ -400,21 +400,24 @@ namespace AmtPtpControlPanel
             if (iconByPercent.TryGetValue(pct, out cached))
                 return cached;
 
-            Color fill = Color.FromArgb(40, 190, 90);
-            Color digit = Color.FromArgb(20, 25, 20);
+            // the digits are the icon: bright level-colored number on top,
+            // a charge-level bar across the bottom of the 16 px tile
+            Color fill = Color.FromArgb(70, 220, 120);
+            Color digit = Color.FromArgb(90, 230, 140);
             if (pct < 10)
             {
-                fill = Color.FromArgb(205, 55, 45);
-                digit = Color.FromArgb(250, 250, 250);
+                fill = Color.FromArgb(235, 70, 55);
+                digit = Color.FromArgb(255, 105, 90);
             }
             else if (pct < 25)
             {
                 fill = Color.FromArgb(240, 80, 60);
-                digit = Color.FromArgb(250, 250, 250);
+                digit = Color.FromArgb(255, 120, 100);
             }
             else if (pct < 50)
             {
-                fill = Color.FromArgb(245, 195, 40);
+                fill = Color.FromArgb(250, 205, 60);
+                digit = Color.FromArgb(252, 215, 80);
             }
 
             Icon built = MakeBatteryIcon(pct / 100f, fill,
@@ -458,38 +461,51 @@ namespace AmtPtpControlPanel
                 g.Clear(Color.Transparent);
                 g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.None;
 
-                using (Pen p = new Pen(border))
-                {
-                    g.DrawRectangle(p, 0, 3, 14, 10);     // cell body outline
-                    g.FillRectangle(new SolidBrush(border), 14, 6, 1, 4); // terminal
-                }
-
+                // charge bar along the bottom edge of the 16 px tile
                 if (frac > 0f)
                 {
-                    int w = (int)(12 * frac);
-                    if (w > 12)
-                        w = 12;
+                    int w = (int)(16 * frac);
+                    if (w > 16)
+                        w = 16;
                     if (w < 1)
                         w = 1;
                     using (SolidBrush b = new SolidBrush(fill))
                     {
-                        g.FillRectangle(b, 1, 4, w, 8);   // interior fill
+                        g.FillRectangle(b, 0, 12, w, 3);
                     }
                 }
 
                 if (digits != null && digits.Length > 0)
                 {
-                    // digits rendered with GDI (crisp at 16 px) and centered
-                    // in the interior; for the "no reading" glyph digits is "?"
-                    using (Font f = new Font("Arial",
-                        digits.Length > 1 ? 6.5f : 8.5f,
-                        FontStyle.Bold, GraphicsUnit.Pixel))
+                    // the number is the icon body: as large as fits, GDI
+                    // rendered (crisp at 16 px), centered in the upper area
+                    float size = digits.Length >= 3 ? 10f : 12f;
+                    Font f = new Font("Arial", size, FontStyle.Bold,
+                        GraphicsUnit.Pixel);
+                    Size sz = TextRenderer.MeasureText(g, digits, f,
+                        new Size(16, 12),
+                        TextFormatFlags.NoPadding);
+                    while ((sz.Width > 15 || sz.Height > 11) && size > 6f)
+                    {
+                        f.Dispose();
+                        size -= 1f;
+                        f = new Font("Arial", size, FontStyle.Bold,
+                            GraphicsUnit.Pixel);
+                        sz = TextRenderer.MeasureText(g, digits, f,
+                            new Size(16, 12),
+                            TextFormatFlags.NoPadding);
+                    }
+                    try
                     {
                         TextRenderer.DrawText(g, digits, f,
-                            new Rectangle(1, 4, 12, 8), digitColor,
+                            new Rectangle(0, 0, 16, 11), digitColor,
                             TextFormatFlags.HorizontalCenter |
                             TextFormatFlags.VerticalCenter |
                             TextFormatFlags.NoPadding);
+                    }
+                    finally
+                    {
+                        f.Dispose();
                     }
                 }
             }
