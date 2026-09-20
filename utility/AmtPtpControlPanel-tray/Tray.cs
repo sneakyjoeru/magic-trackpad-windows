@@ -28,6 +28,13 @@ namespace AmtPtpControlPanel
         private bool trayExitRequested = false;
         private int trayCloseCount = 0;
         private System.Windows.Forms.ToolTip tipOptions;
+        private Icon iconBase16;
+        private Icon iconFull;
+        private Icon iconHigh;
+        private Icon iconMed;
+        private Icon iconLow;
+        private Icon iconEmpty;
+        private Icon iconNa;
 
         private void TrayWire(string[] args)
         {
@@ -230,15 +237,17 @@ namespace AmtPtpControlPanel
                     RefreshTray();
                 };
 
+                BuildBatteryIcons();
+
                 trayIcon = new NotifyIcon();
-                trayIcon.Icon = LoadEmbeddedIcon(16);
+                trayIcon.Icon = iconBase16 != null ? iconBase16 : LoadEmbeddedIcon(16);
                 trayIcon.Text = "Magic Trackpad";
                 trayIcon.ContextMenuStrip = trayMenu;
                 trayIcon.DoubleClick += (s, e) => RestoreFromTray();
                 trayIcon.Visible = true;
 
                 trayTimer = new System.Windows.Forms.Timer();
-                trayTimer.Interval = 15000;
+                trayTimer.Interval = 5000;
                 trayTimer.Tick += (s, e) => RefreshTray();
                 trayTimer.Start();
 
@@ -306,31 +315,128 @@ namespace AmtPtpControlPanel
 
                     if (lastBatteryPercent >= 0)
                     {
-                        // short Text next to the icon = the percentage itself;
-                        // the full sentence stays in the menu
                         miBatteryItem.Text = "Battery: " + lastBatteryPercent + " %";
-                        // .NET 4.0 NotifyIcon.Text serves BOTH as the small label
-                        // next to the icon and as the hover tooltip, so one string
-                        // covers both surfaces (Win11 hides the label unless the
-                        // system "show labels" setting is on, but the hover always
-                        // shows this full text)
-                        trayIcon.Text = "Magic Trackpad - " + lastBatteryPercent + " %";
+                        // the icon itself changes with the charge level, so the
+                        // state is visible even where Windows 11 hides the small
+                        // label next to tray icons; Text doubles as the hover
+                        // tooltip with the exact number
+                        if (PickBatteryIcon(lastBatteryPercent) != null)
+                            trayIcon.Icon = PickBatteryIcon(lastBatteryPercent);
+                        trayIcon.Text = "Magic Trackpad - battery " + lastBatteryPercent + " %";
                     }
                     else
                     {
                         miBatteryItem.Text = "Battery: not available";
-                        trayIcon.Text = "Magic Trackpad (battery not available over USB)";
+                        if (iconNa != null)
+                            trayIcon.Icon = iconNa;
+                        trayIcon.Text = "Magic Trackpad (no battery reading in USB mode)";
                     }
                 }
                 else
                 {
                     miBatteryItem.Text = "Battery: off";
+                    if (iconBase16 != null)
+                        trayIcon.Icon = iconBase16;
                     trayIcon.Text = "Magic Trackpad";
                 }
             }
             catch
             {
             }
+        }
+
+        private Icon PickBatteryIcon(int pct)
+        {
+            if (pct >= 90)
+                return iconFull;
+            if (pct >= 50)
+                return iconHigh;
+            if (pct >= 25)
+                return iconMed;
+            if (pct >= 10)
+                return iconLow;
+            return iconEmpty;
+        }
+
+        private void BuildBatteryIcons()
+        {
+            try
+            {
+                iconBase16 = LoadEmbeddedIcon(16);
+
+                Color border = Color.FromArgb(235, 235, 235);
+                Color green = Color.FromArgb(40, 190, 90);
+                Color amber = Color.FromArgb(245, 195, 40);
+                Color red = Color.FromArgb(240, 80, 60);
+                Color gray = Color.FromArgb(160, 160, 160);
+
+                iconFull = MakeBatteryIcon(1.0f, green, border);
+                iconHigh = MakeBatteryIcon(0.75f, green, border);
+                iconMed = MakeBatteryIcon(0.5f, amber, border);
+                iconLow = MakeBatteryIcon(0.3f, red, border);
+                iconEmpty = MakeBatteryIcon(0.1f, red, border);
+                iconNa = MakeBatteryIcon(0.5f, gray, gray);
+            }
+            catch
+            {
+                iconBase16 = null;
+                iconFull = null;
+                iconHigh = null;
+                iconMed = null;
+                iconLow = null;
+                iconEmpty = null;
+                iconNa = null;
+            }
+        }
+
+        // Draws a 16x16 battery glyph: outlined cell with a terminal nub,
+        // interior filled up to `frac`. Result is a real Icon suitable for
+        // NotifyIcon.Icon so the level is visible at a glance in the tray.
+        private Icon MakeBatteryIcon(float frac, Color fill, Color border)
+        {
+            Bitmap bmp = new Bitmap(16, 16);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.Transparent);
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.None;
+
+                using (Pen p = new Pen(border))
+                {
+                    g.DrawRectangle(p, 1, 4, 11, 8);      // cell body outline
+                    g.FillRectangle(new SolidBrush(border), 12, 6, 2, 4); // terminal
+                }
+
+                if (frac > 0f)
+                {
+                    int w = (int)(11 * frac);
+                    if (w > 11)
+                        w = 11;
+                    if (w < 1)
+                        w = 1;
+                    using (SolidBrush b = new SolidBrush(fill))
+                    {
+                        g.FillRectangle(b, 2, 5, w, 6);
+                    }
+                }
+
+                if (fill == border)
+                {
+                    // "no reading" glyph: draw a ? inside
+                    using (Font f = new Font(FontFamily.GenericSansSerif, 7f, FontStyle.Bold))
+                    using (SolidBrush b = new SolidBrush(Color.FromArgb(240, 240, 240)))
+                    {
+                        g.DrawString("?", f, b, 4f, 4.5f);
+                    }
+                }
+            }
+
+            // FromHandle does not take ownership of the handle, and we must
+            // not destroy it afterwards (the icon must outlive this method);
+            // the icons are built once per process, so the few native handles
+            // live for the life of the app - acceptable.
+            IntPtr h = bmp.GetHicon();
+            bmp.Dispose();
+            return Icon.FromHandle(h);
         }
 
         private void WriteAutoStart()
