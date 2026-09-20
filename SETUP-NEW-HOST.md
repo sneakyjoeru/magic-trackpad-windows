@@ -170,6 +170,48 @@ started.
 
 ---
 
+## Moving the trackpad to another PC / "Failed to open device. Error: 2"
+
+The control panel opens the driver's control device
+(`\\.\AmtPtpControlDeviceUm`). If Windows cannot create it, the panel shows
+
+    Failed to open device. Error: 2
+
+which always means *the trackpad is not bound to this driver* - the panel itself
+is fine. This is normal when the trackpad was just moved from another machine
+that had its own Apple driver, or when an older
+MagicTrackpad2ForWindows/Apple package is still in the way.
+
+Clean slate (recommended when moving between PCs):
+
+```powershell
+# 1. see what is installed - lists every Apple/trackpad driver package and every
+#    leftover device instance, changes nothing
+.\Uninstall-All-Apple-Drivers.cmd -DryRun
+
+# 2. remove them all (double-clicking the .cmd does the same)
+.\Uninstall-All-Apple-Drivers.cmd
+
+# 3. unplug the trackpad, plug it back in (or remove + re-pair Bluetooth), reboot once
+
+# 4. install again
+.\Install.cmd
+```
+
+`Install.cmd -Clean` runs the cleanup and the install in one pass. The installer
+prints the state of every connected trackpad device plus the exact Win32 error
+when the control device is missing, so a failure report tells us whether the
+driver did not bind (error 2) or the installer was not elevated (error 5).
+
+Third-party trackpad tools install their own filter and take the device over -
+uninstall **Magic Utilities** and **Trackpad++** through *Apps & features*
+before installing this driver. The cleanup script reports them if it finds them.
+
+If the control device is still missing afterwards, send the device list the
+installer prints: the driver INF covers `USB\VID_05AC&PID_0324`,
+`USB\VID_27A7&PID_2501/9601` and the Bluetooth HID form of `PID_0324`; any
+other Apple trackpad PID needs to be added to the INF and re-signed.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |

@@ -26,7 +26,10 @@ with the additions this repo needs in practice:
 
 That installs the certificates, the driver package, the control panel (to
 `%LOCALAPPDATA%\MagicTrackpad`) and a Start Menu shortcut, then starts the panel.
-`Uninstall.cmd` removes it all again.
+`Uninstall.cmd` removes it all again. Moving the trackpad from another PC (or any
+"Failed to open device. Error: 2" from the panel) is covered by
+`Uninstall-All-Apple-Drivers.cmd` — it clears every known Apple/trackpad driver package and
+leftover device instance first; `Install.cmd -Clean` does both in one pass.
 
 Details, switches, manual steps, verification and troubleshooting:
 **[SETUP-NEW-HOST.md](SETUP-NEW-HOST.md)** and **[INSTALL.txt](INSTALL.txt)**.
@@ -71,6 +74,7 @@ Tray control panel (right‑click the tray icon):
 magic-trackpad-windows/
 ├── install.ps1                  one-shot installer (what Install.cmd calls)
 ├── Install.cmd / Uninstall.cmd  double-click entry points (self-elevating)
+├── Uninstall-All-Apple-Drivers.cmd  clean slate: removes every Apple trackpad driver
 ├── SETUP-NEW-HOST.md            full setup guide for a fresh machine
 ├── INSTALL.txt                  quick start, manual steps, troubleshooting
 ├── certs/                       MtRootCA.cer + MtPtpSigner.cer (driver trust)

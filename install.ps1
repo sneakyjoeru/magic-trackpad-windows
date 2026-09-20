@@ -21,6 +21,8 @@
         -InstallDir <path>   where the control panel is copied
                              (default: %LOCALAPPDATA%\MagicTrackpad)
         -DriverOnly          only trust the certs + install the driver
+        -Clean               first remove every known Apple/trackpad driver and
+                             leftover device instance (clean slate), then install
         -Autostart           add the per-user Run entry (one UAC per logon)
         -StartMinimized      with -Autostart: start straight into the tray
         -SkipLaunch          do not start the control panel at the end
@@ -33,6 +35,7 @@
 param(
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'MagicTrackpad'),
     [switch]$DriverOnly,
+    [switch]$Clean,
     [switch]$Autostart,
     [switch]$StartMinimized,
     [switch]$SkipLaunch,
@@ -141,23 +144,102 @@ function Install-Driver {
     Start-Sleep -Seconds 4
 }
 
+function Get-ConnectedTrackpadDevices {
+    # Instance IDs of every trackpad-ish device. Three sources, because no
+    # single one works everywhere: pnputil /enum-devices exists only on newer
+    # builds, Get-PnpDevice reports a different set when running elevated from
+    # a scheduled task, and ghosts only show up without -PresentOnly.
+    $ids = @()
+    try {
+        foreach ($line in (& pnputil.exe /enum-devices /connected 2>$null)) {
+            if ($line -match 'Instance ID\s*:\s*(.+)$') {
+                $id = $Matches[1].Trim()
+                if ($id -match '05AC|27A7|0001004C' -and $id -match '0265|0324|030E|2501|9601') { $ids += $id }
+            }
+        }
+    } catch { }
+    if ($ids.Count -gt 0) { return $ids }
+
+    $ids = @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue |
+        Where-Object { $_.InstanceId -match '05AC|27A7|0001004C' -and $_.InstanceId -match '0265|0324|030E|2501|9601' } |
+        ForEach-Object { $_.InstanceId })
+    if ($ids.Count -gt 0) { return $ids }
+
+    $ids = @(Get-PnpDevice -ErrorAction SilentlyContinue |
+        Where-Object { $_.InstanceId -match '05AC|27A7|0001004C' -and $_.InstanceId -match '0265|0324|030E|2501|9601' } |
+        ForEach-Object { $_.InstanceId })
+    return $ids
+}
+
+function Test-ControlDevice {
+    # Exactly what the control panel does: CreateFile on the driver's control
+    # device. A missing device object returns error 2, which the panel shows as
+    # "Failed to open device. Error: 2".
+    $src = @'
+using System;
+using System.Runtime.InteropServices;
+public class MtControlDevice {
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    public static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFile(
+        string name, uint access, uint share, IntPtr sec, uint disp, uint flags, IntPtr tmpl);
+}
+'@
+    try { if (-not ('MtControlDevice' -as [type])) { Add-Type -TypeDefinition $src | Out-Null } }
+    catch { return @{ Ok = $false; Error = -1 } }
+
+    # decimal literals on purpose: Windows PowerShell parses 0x80000000 as a
+    # negative Int32 and the [uint32] cast then throws
+    $access = [uint32]2147483648 -bor [uint32]1073741824   # GENERIC_READ|GENERIC_WRITE
+    $h = [MtControlDevice]::CreateFile('\\.\AmtPtpControlDeviceUm',
+        $access, [uint32]3, [IntPtr]::Zero, [uint32]3, [uint32]0, [IntPtr]::Zero)
+    if ($h -and -not $h.IsInvalid) { $h.Dispose(); return @{ Ok = $true; Error = 0 } }
+    $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+    return @{ Ok = $false; Error = $err }
+}
+
+function Show-ControlDeviceState {
+    $probe = Test-ControlDevice
+    if ($probe.Ok) {
+        Write-Ok 'driver control device \\.\AmtPtpControlDeviceUm is available'
+        return $true
+    }
+    Write-Warn2 "driver control device \\.\AmtPtpControlDeviceUm is NOT available (Win32 error $($probe.Error))"
+    switch ($probe.Error) {
+        2       { Write-Host '    Error 2 = the device object does not exist: the trackpad is not bound to this driver.' }
+        5       { Write-Host '    Error 5 = access denied: this installer is not running elevated.' }
+        default { Write-Host "    Win32 error $($probe.Error) while opening the driver control device." }
+    }
+    Write-Host '    The control panel would report "Failed to open device. Error: 2".'
+    Write-Host '    Fix, in order:'
+    Write-Host '      1. unplug the USB-C cable and plug it back in (or remove + re-pair Bluetooth), then run this installer again'
+    Write-Host '      2. reboot once - a WUDF host or a stale device instance can be stuck'
+    Write-Host '      3. run Uninstall-All-Apple-Drivers.cmd (removes every old Apple / trackpad'
+    Write-Host '         driver and ghost device), then Install.cmd again - or run Install.cmd -Clean'
+    Write-Host '      4. if it still fails, the device list above is what we need: the hardware IDs'
+    Write-Host '         may not be covered by the driver INF'
+    return $false
+}
+
 function Show-DeviceState {
     Write-Step 'trackpad device state'
-    # matches the wired USB ids (VID_05AC / VID_27A7) and the Bluetooth
-    # HID enumeration, which writes the vendor id as "VID&0001004C"
-    $devices = Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue |
-        Where-Object { $_.InstanceId -match 'VID[&_]0*5AC|VID[&_]0*27A7|VID&0001004[Cc]|VID&000127[Aa]7' }
-    if (-not $devices) {
-        Write-Warn2 'no Magic Trackpad hardware found (connect it by USB-C or pair it over Bluetooth, then re-run with -DriverOnly)'
+    # pnputil is used instead of Get-PnpDevice: the CIM-based cmdlet reports a
+    # different (sometimes empty) "present" set when run elevated from a
+    # service/scheduled-task context, while pnputil always reflects the real
+    # device tree.
+    $devices = @(Get-ConnectedTrackpadDevices)
+    if ($devices.Count -eq 0) {
+        Write-Warn2 'no connected Magic Trackpad hardware found (connect it by USB-C or pair it over Bluetooth, then re-run with -DriverOnly)'
         return $false
     }
-    $ok = $false
-    foreach ($d in $devices) {
-        Write-Host ("    {0,-8} {1,-10} {2}" -f $d.Status, $d.Class, $d.InstanceId)
-        if ($d.Status -eq 'OK') { $ok = $true }
+    foreach ($d in $devices) { Write-Host "    $d" }
+    $problems = @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue |
+        Where-Object { $_.InstanceId -match '05AC|27A7|0001004C' -and $_.InstanceId -match '0265|0324|030E|2501|9601' -and $_.Status -ne 'OK' })
+    if ($problems.Count -gt 0) {
+        Write-Warn2 'device present but not started - unplug/replug the cable or reboot'
+        return $false
     }
-    if ($ok) { Write-Ok 'device is started' } else { Write-Warn2 'device present but not started - unplug/replug the cable or reboot' }
-    return $ok
+    Write-Ok 'device is present'
+    return $true
 }
 
 function Install-App {
@@ -285,11 +367,23 @@ if ($Uninstall) {
 }
 
 try {
+    if ($Clean) {
+        $cleanup = Join-Path $root 'Uninstall-All-Apple-Drivers.ps1'
+        if (Test-Path $cleanup) {
+            Write-Step 'clean slate: removing every known Apple / trackpad driver first'
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $cleanup
+            Write-Host ''
+        } else {
+            Write-Warn2 "cleanup script not found at $cleanup"
+        }
+    }
+
     Write-Step 'trusting the driver certificate(s)'
     Import-DriverCerts
 
     Install-Driver
     $deviceOk = Show-DeviceState
+    $ctrlOk = Show-ControlDeviceState
 
     if (-not $DriverOnly) {
         Install-App
@@ -312,6 +406,9 @@ try {
     }
     if (-not $deviceOk) {
         Write-Host '  NOTE: the trackpad was not detected as started - connect/replug it and re-run with -DriverOnly.' -ForegroundColor Yellow
+    }
+    if (-not $ctrlOk) {
+        Write-Host '  NOTE: the driver control device is missing - see the fix list above; the panel needs it.' -ForegroundColor Yellow
     }
 } catch {
     Write-Host ''

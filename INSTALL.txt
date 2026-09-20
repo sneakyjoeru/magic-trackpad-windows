@@ -43,6 +43,12 @@ WHAT IS IN THE ARCHIVE
   Install.cmd                  DOUBLE-CLICK THIS - asks for admin rights once and
                                runs install.ps1 (optional arguments are passed on)
   Uninstall.cmd                the reverse: panel, autostart, driver, certificates
+  Uninstall-All-Apple-Drivers.cmd
+                               clean slate: removes EVERY known Apple / Magic
+                               Trackpad driver package and leftover device
+                               instance (use this when the panel reports
+                               "Failed to open device. Error: 2")
+  Uninstall-All-Apple-Drivers.ps1   the same, with -DryRun to only list things
   install.ps1                  one-shot installer / uninstaller (the actual steps)
   AmtPtpControlPanel.exe       tray control panel (elevated, single instance)
   README.txt                   what the control panel does, option by option
@@ -103,6 +109,26 @@ Device present but "not started" / nothing reacts to the trackpad
       Unplug and replug the USB-C cable, then re-run with -DriverOnly.
       Check Device Manager: "Human Interface Devices" should show the
       Magic Trackpad entries with no warning triangle.
+
+The panel says "Failed to open device. Error: 2"
+      Error 2 = the driver's control device (\\.\AmtPtpControlDeviceUm) does not
+      exist, which means the trackpad is not bound to this driver (yet). In
+      order:
+
+        1. replug the USB-C cable (or remove + re-pair the Bluetooth
+           connection), then run Install.cmd again;
+        2. reboot once - a stuck WUDF host or a stale device instance is the
+           most common cause right after switching the trackpad between PCs;
+        3. run Uninstall-All-Apple-Drivers.cmd (double-click) to remove every
+           old Apple/trackpad driver package and leftover device instance, then
+           run Install.cmd again. It also reports third-party tools that hijack
+           the trackpad (Magic Utilities, Trackpad++) - uninstall those through
+           Apps & features;
+        4. Install.cmd -Clean does step 3 and the install in one go;
+        5. still failing? The installer prints every connected trackpad device
+           ID it can find. Send that list - if the hardware ID is not one of
+           USB\VID_05AC&PID_0324, USB\VID_27A7&PID_2501/9601 or the Bluetooth
+           HID form of 0324, the driver INF does not cover that model yet.
 
 Battery shows "no reading"
       Normal over USB-C - the trackpad only reports the battery over
