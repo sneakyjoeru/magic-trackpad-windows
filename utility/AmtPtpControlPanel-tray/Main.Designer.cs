@@ -59,12 +59,16 @@ namespace AmtPtpControlPanel
             this.ctlBatteryGroupBox = new System.Windows.Forms.GroupBox();
             this.ctlBatteryUpdate = new System.Windows.Forms.Button();
             this.ctlShowBatteryInTray = new System.Windows.Forms.CheckBox();
+            this.ctlStartupGroupBox = new System.Windows.Forms.GroupBox();
+            this.ctlStartAuto = new System.Windows.Forms.CheckBox();
+            this.ctlStartHidden = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.ctlFeedback)).BeginInit();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
             this.groupBox3.SuspendLayout();
             this.groupBox4.SuspendLayout();
             this.ctlBatteryGroupBox.SuspendLayout();
+            this.ctlStartupGroupBox.SuspendLayout();
             this.SuspendLayout();
             // 
             // ctlTouchpadSettings
@@ -351,9 +355,39 @@ namespace AmtPtpControlPanel
             this.ctlShowBatteryInTray.Location = new System.Drawing.Point(16, 64);
             this.ctlShowBatteryInTray.Name = "ctlShowBatteryInTray";
             this.ctlShowBatteryInTray.TabIndex = 16;
-            this.ctlShowBatteryInTray.Text = "Show battery % in tray";
+            this.ctlShowBatteryInTray.Text = "Show battery percentage in tray";
             this.ctlShowBatteryInTray.UseVisualStyleBackColor = true;
             //
+            //
+            // ctlStartupGroupBox
+            //
+            this.ctlStartupGroupBox.Controls.Add(this.ctlStartAuto);
+            this.ctlStartupGroupBox.Controls.Add(this.ctlStartHidden);
+            this.ctlStartupGroupBox.Location = new System.Drawing.Point(13, 702);
+            this.ctlStartupGroupBox.Name = "ctlStartupGroupBox";
+            this.ctlStartupGroupBox.Size = new System.Drawing.Size(790, 92);
+            this.ctlStartupGroupBox.TabIndex = 17;
+            this.ctlStartupGroupBox.TabStop = false;
+            this.ctlStartupGroupBox.Text = "Startup:";
+            // 
+            // ctlStartAuto
+            // 
+            this.ctlStartAuto.AutoSize = true;
+            this.ctlStartAuto.Location = new System.Drawing.Point(16, 24);
+            this.ctlStartAuto.Name = "ctlStartAuto";
+            this.ctlStartAuto.TabIndex = 0;
+            this.ctlStartAuto.Text = "Start automatically at login (one UAC prompt per login)";
+            this.ctlStartAuto.UseVisualStyleBackColor = true;
+            //
+            // ctlStartHidden
+            //
+            this.ctlStartHidden.AutoSize = true;
+            this.ctlStartHidden.Location = new System.Drawing.Point(16, 52);
+            this.ctlStartHidden.Name = "ctlStartHidden";
+            this.ctlStartHidden.TabIndex = 1;
+            this.ctlStartHidden.Text = "Start hidden in system tray (with the option above)";
+            this.ctlStartHidden.UseVisualStyleBackColor = true;
+            // 
             // ctlBatteryGroupBox
             //
             this.ctlBatteryGroupBox.Controls.Add(this.ctlShowBatteryInTray);
@@ -380,8 +414,9 @@ namespace AmtPtpControlPanel
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(815, 705);
+            this.ClientSize = new System.Drawing.Size(815, 802);
             this.Controls.Add(this.ctlBatteryGroupBox);
+            this.Controls.Add(this.ctlStartupGroupBox);
             this.Controls.Add(this.groupBox4);
             this.Controls.Add(this.groupBox3);
             this.Controls.Add(this.ctlFocusHack);
@@ -405,6 +440,7 @@ namespace AmtPtpControlPanel
             this.groupBox4.ResumeLayout(false);
             this.groupBox4.PerformLayout();
             this.ctlBatteryGroupBox.ResumeLayout(false);
+            this.ctlStartupGroupBox.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -441,6 +477,9 @@ namespace AmtPtpControlPanel
         private System.Windows.Forms.GroupBox ctlBatteryGroupBox;
         private System.Windows.Forms.Button ctlBatteryUpdate;
         private System.Windows.Forms.CheckBox ctlShowBatteryInTray;
+        private System.Windows.Forms.GroupBox ctlStartupGroupBox;
+        private System.Windows.Forms.CheckBox ctlStartAuto;
+        private System.Windows.Forms.CheckBox ctlStartHidden;
     }
 }
 

@@ -156,19 +156,21 @@ namespace AmtPtpControlPanel
                 miBatteryItem.Enabled = false;
                 miBatteryItem.ToolTipText =
                     "Charge of the trackpad's built-in battery, read from the driver " +
-                    "about every 15 seconds. The driver only reports the battery when " +
+                    "every 5 seconds. The driver only reports the battery when " +
                     "the trackpad is connected via Bluetooth; with a USB connection " +
                     "this line shows 'not available'. The app must run elevated " +
                     "(admin), otherwise the driver's battery port cannot be opened.";
 
-                miShowBattery = new ToolStripMenuItem("Show battery in tray");
+                miShowBattery = new ToolStripMenuItem("Show battery percentage in tray");
                 miShowBattery.Checked = SettingShowBattery;
                 miShowBattery.CheckOnClick = true;
                 miShowBattery.ToolTipText =
-                    "When on, the battery percentage is drawn next to the tray icon " +
-                    "(and in the line above). This works only in Bluetooth mode: in " +
-                    "USB mode the menu keeps showing 'not available', because the " +
-                    "USB driver does not expose the battery.";
+                    "When on, the tray icon changes with the charge level (green " +
+                    "full, amber medium, red low) and the exact percentage shows in " +
+                    "this menu and in the icon's hover text, refreshed every 5 " +
+                    "seconds. Bluetooth mode only: in USB mode the driver exposes " +
+                    "no level and the icon shows a gray question mark. Same switch " +
+                    "exists in the settings window (Battery group).";
                 miShowBattery.Click += (s, e) =>
                 {
                     TraySetInt("ShowBattery", miShowBattery.Checked ? 1 : 0);
@@ -187,6 +189,7 @@ namespace AmtPtpControlPanel
                 miAutoStart.Click += (s, e) =>
                 {
                     TraySetInt("AutoStart", miAutoStart.Checked ? 1 : 0);
+                    ctlStartAuto.Checked = miAutoStart.Checked;
                     WriteAutoStart();
                 };
 
@@ -200,6 +203,7 @@ namespace AmtPtpControlPanel
                 miStartMin.Click += (s, e) =>
                 {
                     TraySetInt("StartMin", miStartMin.Checked ? 1 : 0);
+                    ctlStartHidden.Checked = miStartMin.Checked;
                     WriteAutoStart();
                 };
 
@@ -235,6 +239,22 @@ namespace AmtPtpControlPanel
                     TraySetInt("ShowBattery", ctlShowBatteryInTray.Checked ? 1 : 0);
                     miShowBattery.Checked = ctlShowBatteryInTray.Checked;
                     RefreshTray();
+                };
+
+                ctlStartAuto.Checked = SettingAutoStart;
+                ctlStartAuto.CheckedChanged += (s, e) =>
+                {
+                    TraySetInt("AutoStart", ctlStartAuto.Checked ? 1 : 0);
+                    miAutoStart.Checked = ctlStartAuto.Checked;
+                    WriteAutoStart();
+                };
+
+                ctlStartHidden.Checked = SettingStartMin;
+                ctlStartHidden.CheckedChanged += (s, e) =>
+                {
+                    TraySetInt("StartMin", ctlStartHidden.Checked ? 1 : 0);
+                    miStartMin.Checked = ctlStartHidden.Checked;
+                    WriteAutoStart();
                 };
 
                 BuildBatteryIcons();
@@ -540,11 +560,26 @@ namespace AmtPtpControlPanel
                     "Reads the current battery percentage from the driver right now. " +
                     "Refuses silently in USB mode - connect via Bluetooth to use it.");
                 tipOptions.SetToolTip(ctlShowBatteryInTray,
-                    "When on, the battery percentage is drawn next to the tray icon " +
-                    "(the icon's hover tooltip carries it as well, and the " +
-                    "'Battery:' line in the tray menu always does). Bluetooth mode " +
-                    "only - in USB mode the driver exposes no level. Same switch " +
-                    "also in the right-click menu of the tray icon.");
+                    "When on, the tray icon changes with the charge level (green " +
+                    "full/high, amber medium, red low) and the percentage shows in " +
+                    "the tray menu and the icon's hover text, refreshed every 5 " +
+                    "seconds. Bluetooth mode only - in USB mode the driver exposes " +
+                    "no level and the icon shows a gray question mark. Same switch " +
+                    "is in the right-click menu of the tray icon.");
+                tipOptions.SetToolTip(ctlStartupGroupBox,
+                    "Controls what happens at login: whether the app starts on its " +
+                    "own and whether it should appear only as a tray icon.");
+                tipOptions.SetToolTip(ctlStartAuto,
+                    "Adds 'Magic Trackpad' to the current user's startup. The app " +
+                    "requires admin rights, so at each login a UAC prompt appears - " +
+                    "accept it to keep the tray icon, or the app waits (with a dialog) " +
+                    "until you retry. Same option is in the tray icon's right-click menu.");
+                tipOptions.SetToolTip(ctlStartHidden,
+                    "Only relevant together with 'Start automatically at login': " +
+                    "at login the app appears as a tray icon only - no window pops " +
+                    "up. Double-click the tray icon (or use 'Open') to bring up the " +
+                    "settings window. When you start the app by hand this has no " +
+                    "effect. Same option is in the tray icon's right-click menu.");
                 tipOptions.SetToolTip(ctlApply,
                     "Saves all options to the driver configuration and applies them " +
                     "immediately - the running driver picks them up without a reboot.");
