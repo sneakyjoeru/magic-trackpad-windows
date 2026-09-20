@@ -192,9 +192,15 @@ If test signing cannot be enabled (Secure Boot on, corporate policy, Windows 11)
 install the **Microsoft-signed** package instead — no certificates, no test mode:
 
 ```
-Install-Microsoft-Signed.cmd            (double-click; or Install.cmd -SignedDriver)
-Install-Microsoft-Signed.cmd -Clean     (also wipes old Apple/trackpad drivers first)
+Fix-Trackpad-Error2.cmd                 (double-click: clean + signed install + device restart)
+Install-Microsoft-Signed.cmd            (just the signed install)
+Install-Microsoft-Signed.cmd -Clean     (signed install, wiping old drivers first)
 ```
+
+`Fix-Trackpad-Error2.cmd` is the one to use when the panel already reports error 2: it removes every
+old Apple/trackpad driver package and device instance, installs the Microsoft-signed driver,
+restarts the present trackpad device instances (`pnputil /restart-device`) so Windows really
+re-binds them - a device stuck in *Error* otherwise stays there - and starts the panel again.
 
 > Our self-signed INF carries the newer `DriverVer`, so when both packages are installed Windows
 > can keep preferring the one that cannot load. Remove the old package first

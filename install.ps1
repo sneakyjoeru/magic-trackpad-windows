@@ -230,6 +230,23 @@ function Get-ConnectedTrackpadDevices {
     return $ids
 }
 
+function Restart-TrackpadDevices {
+    # A device bound to a driver that failed to start stays in "Error" until the
+    # instance is restarted - switching packages is not enough on its own.
+    $present = @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue |
+        Where-Object { $_.InstanceId -match '05AC|27A7|0001004C' -and $_.InstanceId -match '0265|0324|030E|2501|9601' })
+    if ($present.Count -eq 0) { return $false }
+    Write-Step 'restarting the trackpad device instances so Windows re-binds them'
+    $done = 0
+    foreach ($d in $present) {
+        $out = & pnputil.exe /restart-device "$($d.InstanceId)" 2>&1
+        if ($LASTEXITCODE -eq 0) { Write-Ok "restarted $($d.InstanceId)"; $done++ }
+        else { Write-Info "could not restart $($d.InstanceId)" }
+    }
+    if ($done -gt 0) { Start-Sleep -Seconds 5 }
+    return ($done -gt 0)
+}
+
 function Test-ControlDevice {
     # Exactly what the control panel does: CreateFile on the driver's control
     # device. A missing device object returns error 2, which the panel shows as
@@ -458,6 +475,14 @@ try {
     Install-Driver
     $deviceOk = Show-DeviceState
     $ctrlOk = Show-ControlDeviceState
+    if (-not $ctrlOk) {
+        # the usual leftover after switching driver packages: the device is stuck
+        # in an error state - restart it and look again
+        if (Restart-TrackpadDevices) {
+            Write-Step 're-checking the driver control device'
+            $ctrlOk = Show-ControlDeviceState
+        }
+    }
 
     if (-not $DriverOnly) {
         Install-App

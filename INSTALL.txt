@@ -42,6 +42,10 @@ WHAT IS IN THE ARCHIVE
 
   Install.cmd                  DOUBLE-CLICK THIS - asks for admin rights once and
                                runs install.ps1 (optional arguments are passed on)
+  Fix-Trackpad-Error2.cmd       ONE-CLICK REPAIR for "Failed to open device.
+                               Error: 2": removes all old Apple/trackpad drivers,
+                               installs the Microsoft-signed package, restarts the
+                               trackpad devices so they re-bind, starts the panel
   Install-Microsoft-Signed.cmd the same, but installs the Microsoft-signed driver
                                (driver-ms-signed\) - needed on machines where the
                                self-signed kernel filter cannot load (Windows 11 /
@@ -154,8 +158,9 @@ The panel says "Failed to open device. Error: 2"
 
       Bluetooth trackpad on Windows 11 (build 22000+) with Secure Boot?
       Then it is the driver signature - see below. Quickest fix: double-click
-      Install-Microsoft-Signed.cmd -Clean, wait for it to finish, then
-      unplug/replug the trackpad (or remove + re-pair Bluetooth).
+      Fix-Trackpad-Error2.cmd and let it finish (it also restarts the trackpad
+      devices so they leave the Error state). If the trackpad was paired over
+      Bluetooth before, remove and re-pair it once afterwards.
 
       If it still fails, it is almost always the DRIVER SIGNATURE:
         * this package is SELF-SIGNED, and its kernel driver
