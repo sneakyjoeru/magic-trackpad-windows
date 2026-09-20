@@ -79,6 +79,20 @@ automatically:
        .\utility\Verify-MtTrackpad.ps1
 
 --------------------------------------------------------------------------------
+FORCE CLICK (optional)
+--------------------------------------------------------------------------------
+  A firm press can act as a second click (right button by default). That needs
+  the optional self-signed driver variant, because the pressure value only
+  exists inside the driver and a modified driver cannot keep Microsoft's
+  signature. It ships as a separate archive:
+
+      Apple Magic Trackpad Setup Utility + Drivers v1.0 (force click, self-signed)
+
+  Using it requires Windows test signing (bcdedit /set testsigning on + reboot,
+  Secure Boot off). See FORCE-CLICK.txt in that archive. Everything else is
+  identical; the signed package here ignores the settings.
+
+--------------------------------------------------------------------------------
 REQUIREMENTS
 --------------------------------------------------------------------------------
 

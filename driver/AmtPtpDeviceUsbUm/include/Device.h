@@ -42,6 +42,13 @@ typedef struct _DEVICE_CONTEXT
 	BOOL                        IgnoreNearFingers;
 	BOOL                        PalmRejection;
 
+	// Force click: when the highest contact pressure reaches this value the
+	// driver signals the named event below; the control panel then performs the
+	// configured action (0 = feature off). Pressure is a UCHAR (0-255).
+	ULONG                       ForceClickPressure;
+	HANDLE                      ForceClickEvent;
+	ULONG                       LastForceClickTick;
+
 } DEVICE_CONTEXT, *PDEVICE_CONTEXT;
 
 //

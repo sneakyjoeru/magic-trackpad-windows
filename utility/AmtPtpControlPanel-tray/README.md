@@ -33,6 +33,17 @@ Settings persist to the same vendor registry location the original panel uses
 (`HKLM\...\WUDF\Services\AmtPtpDeviceUsbUm\Parameters`), so both panels control the
 same driver configuration. *Apply* hot‑reloads the driver — no reboot.
 
+## Force click
+
+The settings window has a **Force click** group: a firm press can act as a second click. Pick the
+action (right mouse button - the default, middle, double left click, mouse back/forward,
+Ctrl + Left click, Enter, or nothing) and the pressure threshold (raw 1-255). The driver signals a
+named event (`Global\MagicTrackpad.ForceClick`) and the panel performs the action with `SendInput`.
+
+This needs the optional **self-signed force-click driver** (`-SelfSigned` install, test signing on):
+the pressure value only exists inside the driver, and a modified driver cannot keep Microsoft's
+signature. With the Microsoft-signed driver the group is inert.
+
 ## Requirements
 
 - Windows 10/11 x64

@@ -436,6 +436,8 @@ AmtPtpServiceTouchInputInterruptType5(
 	UINT timestamp;
 	INT x, y = 0;
 	size_t raw_n, i = 0;
+	// highest contact pressure in the current report (force click detection)
+	ULONG forceClickMax = 0;
 
 	Status = WdfIoQueueRetrieveNextRequest(
 		DeviceContext->InputQueue,
@@ -487,6 +489,7 @@ AmtPtpServiceTouchInputInterruptType5(
 		DeviceContext->IgnoreButtonFinger = ReadSettingValue(L"IgnoreButtonFinger", 0) ? TRUE : FALSE;
 		DeviceContext->IgnoreNearFingers = ReadSettingValue(L"IgnoreNearFingers", 1) ? TRUE : FALSE;
 		DeviceContext->PalmRejection = ReadSettingValue(L"PalmRejection", 0) ? TRUE : FALSE;
+		DeviceContext->ForceClickPressure = ReadSettingValue(L"ForceClickPressure", 0);
 	}
 
 	if (DeviceContext->ButtonDisabled)
@@ -497,6 +500,7 @@ AmtPtpServiceTouchInputInterruptType5(
 		raw_n = (NumBytesTransferred - sizeof(struct TRACKPAD_REPORT_TYPE5)) / sizeof(struct TRACKPAD_FINGER_TYPE5);
 		if (raw_n >= PTP_MAX_CONTACT_POINTS) raw_n = PTP_MAX_CONTACT_POINTS;
 		PtpReport.ContactCount = (UCHAR)raw_n;
+		forceClickMax = 0;   // recomputed for every report
 
 #ifdef INPUT_CONTENT_TRACE
 		TraceEvents(
@@ -525,6 +529,8 @@ AmtPtpServiceTouchInputInterruptType5(
 			// I've gotten 0x6 if I press on the trackpad and then keep my finger close
 			// Note: These values come from my MBP9,2. These also are valid on my MT2
 			PtpReport.Contacts[i].TipSwitch = (f->State & 0x4) && (DeviceContext->IgnoreNearFingers == FALSE ? TRUE : !(f->State & 0x2));
+			if (PtpReport.Contacts[i].TipSwitch && f->Pressure > forceClickMax)
+				forceClickMax = f->Pressure;
 
 			// The Microsoft spec says reject any input larger than 25mm. This is not ideal
 			// for Magic Trackpad 2 - so we raised the threshold a bit higher.
@@ -618,6 +624,29 @@ AmtPtpServiceTouchInputInterruptType5(
 				f->Size
 			);
 //#endif
+		}
+	}
+
+	// ---- force click ---------------------------------------------------
+	// Signal the control panel through a named event when the user presses
+	// noticeably harder than a normal touch. The panel performs the action
+	// configured in its Force click group (right click by default) with
+	// SendInput. Event driven: nothing polls, nothing keeps the trackpad or
+	// its radio awake.
+	if (DeviceContext->ForceClickPressure > 0 &&
+		forceClickMax >= DeviceContext->ForceClickPressure)
+	{
+		ULONG now = GetTickCount();
+		if (DeviceContext->ForceClickEvent == NULL)
+		{
+			DeviceContext->ForceClickEvent = CreateEventW(NULL, FALSE, FALSE,
+				L"Global\\MagicTrackpad.ForceClick");
+		}
+		if (DeviceContext->ForceClickEvent != NULL &&
+			(now - DeviceContext->LastForceClickTick) > 300)
+		{
+			DeviceContext->LastForceClickTick = now;
+			SetEvent(DeviceContext->ForceClickEvent);
 		}
 	}
 

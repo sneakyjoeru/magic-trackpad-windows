@@ -225,6 +225,24 @@ stale-package cases by itself — then send the device list the installer prints
 `USB\VID_27A7&PID_2501/9601` and the Bluetooth HID form of `PID_0324`; any
 other Apple trackpad PID needs to be added to the INF and re-signed.
 
+## Force click (optional, self-signed)
+
+A firm press on the trackpad can act as a second click (right mouse button by default, plus middle
+click, double left click, mouse back/forward, Ctrl + Left click, Enter or nothing). Use the
+**"(force click, self-signed)"** archive for that:
+
+```powershell
+bcdedit /set testsigning on      # Secure Boot off, then reboot
+.\Install.cmd -SelfSigned        # from the force-click archive
+```
+
+The pressure value only exists inside the driver, so this cannot be done with the Microsoft-signed
+package. The driver signals a named event; the panel performs the action with SendInput - event
+driven, no polling.
+
+To go back: `Uninstall-All-Apple-Drivers.cmd`, `Install.cmd`, then
+`bcdedit /set testsigning off` + reboot.
+
 ## "Starting the panel does nothing"
 
 The panel is single-instance and lives in the notification area. If the installer already started
