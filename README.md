@@ -7,7 +7,8 @@ Built on the open‑source [MagicTrackpad2ForWindows](https://github.com/vitopla
 - a **PowerShell setup & control utility** (`utility/MtTrackpad.ps1`) that works headless (SSH / scheduled tasks) — no GUI required;
 - an **unattended verification harness** (`utility/Verify-MtTrackpad.ps1`) that reports PASS/FAIL from signals a human at the keyboard is not needed for;
 - a small **VID 27A7** compatibility patch (some Magic Trackpad 2 units enumerate under vendor ID `27A7` instead of `05AC`);
-- a **Windows 10** driver INF variant (the stock INF targets a Win11‑era section).
+- a **Windows 10** driver INF variant (the stock INF targets a Win11‑era section);
+- a **tray control panel** (`utility/AmtPtpControlPanel-tray/`) — the upstream WinForms panel plus a system‑tray presence with an optional battery‑percentage display, per‑user autostart, and explanatory tooltips on every option. See [Control panel (tray)](#control-panel-tray).
 
 ## What the driver gives you
 
@@ -34,7 +35,8 @@ magic-trackpad-windows/
 └── utility/
     ├── MtTrackpad.ps1               # setup & control utility (this is the main tool)
     ├── Verify-MtTrackpad.ps1        # unattended PASS/FAIL verification harness
-    └── Build-MtTrackpad.ps1         # non-interactive build + sign + inf2cat helper
+    ├── Build-MtTrackpad.ps1         # non-interactive build + sign + inf2cat helper
+    └── AmtPtpControlPanel-tray/     # tray control panel (source + build.ps1)
 ```
 
 ## Devices supported
@@ -161,6 +163,36 @@ absence of a service means no second (phantom) touch/pointer instance appears.
 3. Re‑run `wireless` to capture the trackpad's `BTH\...` / `BTHLEDEVICE\...` hardware IDs.
 4. Add those IDs to the INF (`AmtPtpHidFilter_MiniPortDevice` bindings), rebuild, reinstall.
 5. Battery + haptics then work over the air.
+
+## Control panel (tray)
+
+`utility/AmtPtpControlPanel-tray/` is a fork of the upstream WinForms control panel
+(`driver/AmtPtpControlPanel/`) extended with a system‑tray presence. A prebuilt
+`AmtPtpControlPanel.exe` is attached to each [release](https://github.com/sneakyjoeru/magic-trackpad-windows/releases).
+
+Key differences from the upstream panel:
+
+- **Runs elevated, always.** Launching the app starts a small non‑elevated stub that
+  hands over to an elevated copy (UAC) through a session‑scoped mutex + named event;
+  the stub then exits, so exactly one elevated process owns the tray icon. Duplicate
+  launches while an instance is running exit quietly (no extra UAC prompt).
+- **Battery percentage in the tray icon** — toggle *Show battery in tray*.
+  Bluetooth mode only: over USB‑C the trackpad is powered by the cable and the driver
+  reports no level, so the icon then falls back to the plain name tooltip.
+- **Explanatory tooltips** on every option (click feedback modes, gesture stopping by
+  pressure or by contact size, palm rejection, finger filtering, the focus‑hack field…).
+- **Per‑user options** (*Start at login*, *Start minimized*) in
+  `HKCU\Software\MtTrackpad\Tray`. Autostart re‑runs the app after logon, which
+  triggers one UAC prompt; refusing it just leaves the app out of the tray until you
+  start it manually (the stub asks once, Retry/Exit).
+
+Requirements: Windows 10/11 x64, the driver installed, and an account in **local
+Administrators** (opening the driver's control device needs an elevated token).
+
+Both panels write the same vendor registry settings
+(`HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\WUDF\Services\AmtPtpDeviceUsbUm\Parameters`)
+— using them interchangeably is safe, and *Apply* hot‑reloads the driver without a
+reboot.
 
 ## Credits
 
