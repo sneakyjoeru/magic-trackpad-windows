@@ -230,27 +230,6 @@ namespace AmtPtpControlPanel
                 miOpen.ToolTipText = "Brings up the main settings window.";
                 miOpen.Click += (s, e) => RestoreFromTray();
 
-                // Windows 11 hides the text next to tray icons by default and
-                // offers no API to force it - this opens the system page where
-                // the per-icon "show label" switch lives
-                ToolStripMenuItem miShowLabel =
-                    new ToolStripMenuItem("Show label next to the tray icon...");
-                miShowLabel.ToolTipText =
-                    "Windows 11 hides the small text next to tray icons by default. " +
-                    "This opens the system settings page where you can switch the " +
-                    "label on for the Magic Trackpad icon - the label then shows the " +
-                    "live percentage (the icon itself already shows the number).";
-                miShowLabel.Click += (s, e) =>
-                {
-                    try
-                    {
-                        System.Diagnostics.Process.Start("ms-settings:notifications");
-                    }
-                    catch
-                    {
-                    }
-                };
-
                 ToolStripMenuItem miExit = new ToolStripMenuItem("Exit");
                 miExit.ToolTipText =
                     "Stops the app and removes the tray icon. Your options are saved " +
@@ -270,7 +249,6 @@ namespace AmtPtpControlPanel
                 trayMenu.Items.Add(miStartMin);
                 trayMenu.Items.Add(new ToolStripSeparator());
                 trayMenu.Items.Add(miOpen);
-                trayMenu.Items.Add(miShowLabel);
                 trayMenu.Items.Add(miExit);
 
                 // settings-window twin of the menu option (bidirectional sync)
@@ -449,29 +427,36 @@ namespace AmtPtpControlPanel
 
             // the digits are the icon: bright level-colored number on top,
             // a charge-level bar across the bottom of the 16 px tile
-            Color fill = Color.FromArgb(70, 220, 120);
-            Color digit = Color.FromArgb(90, 230, 140);
-            if (pct < 10)
-            {
-                fill = Color.FromArgb(235, 70, 55);
-                digit = Color.FromArgb(255, 105, 90);
-            }
-            else if (pct < 25)
-            {
-                fill = Color.FromArgb(240, 80, 60);
-                digit = Color.FromArgb(255, 120, 100);
-            }
-            else if (pct < 50)
-            {
-                fill = Color.FromArgb(250, 205, 60);
-                digit = Color.FromArgb(252, 215, 80);
-            }
+            Color fill = LevelColor(pct);
+            Color digit = DigitColor(pct);
 
             Icon built = MakeBatteryIcon(pct / 100f, fill,
                 Color.FromArgb(235, 235, 235), pct.ToString(), digit);
             if (built != null)
                 iconByPercent[pct] = built;
             return built;
+        }
+
+        // shared level palette: the tray icon, the on-screen readout and the
+        // tooltip all use the same colours
+        private static Color LevelColor(int pct)
+        {
+            if (pct < 25)
+                return Color.FromArgb(225, 75, 55);
+            if (pct < 50)
+                return Color.FromArgb(240, 185, 45);
+            return Color.FromArgb(60, 190, 105);
+        }
+
+        private static Color DigitColor(int pct)
+        {
+            if (pct < 10)
+                return Color.FromArgb(255, 105, 90);
+            if (pct < 25)
+                return Color.FromArgb(255, 130, 110);
+            if (pct < 50)
+                return Color.FromArgb(252, 215, 80);
+            return Color.FromArgb(90, 230, 140);
         }
 
         private void BuildBatteryIcons()
@@ -713,24 +698,13 @@ namespace AmtPtpControlPanel
         private const uint OPEN_EXISTING = 3;
         private const uint FILE_SHARE_READ = 1;
         private const uint FILE_SHARE_WRITE = 2;
-        private const uint FILE_ATTRIBUTE_NORMAL = 0x80;
-        private const uint FILE_FLAG_OVERLAPPED = 0x40000000;
-        private const int ERROR_IO_PENDING = 998;
-        private const uint WAIT_TIMEOUT = 258;
-        private const uint WAIT_OBJECT_0 = 0;
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct OVERLAPPED
-        {
-            public uint Internal;
-            public uint InternalHigh;
-            public uint Offset;
-            public uint OffsetHigh;
-            public IntPtr hEvent;
-        }
-
+        // NOTE: the return type must be a CONCRETE SafeHandle type. Declaring
+        // the abstract SafeHandle base class here makes every call fail with
+        // MarshalDirectiveException ("Returned SafeHandles cannot be abstract")
+        // at runtime - which silently killed every battery read until
+        // 2026-09-20. Parameters may stay abstract, returns may not.
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
-        private static extern SafeHandle CreateFile(
+        private static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFile(
             string lpFileName,
             uint dwDesiredAccess,
             uint dwShareMode,
@@ -741,38 +715,24 @@ namespace AmtPtpControlPanel
 
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool DeviceIoControl(
-            SafeHandle hDevice,
+            Microsoft.Win32.SafeHandles.SafeFileHandle hDevice,
             uint dwIoControlCode,
             IntPtr lpInBuffer,
             uint nInBufferSize,
             IntPtr lpOutBuffer,
             uint nOutBufferSize,
             out uint lpBytesReturned,
-            ref OVERLAPPED lpOverlapped);
+            IntPtr lpOverlapped);
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr CreateEvent(IntPtr lpEventAttributes, bool bManualReset, bool bInitialState, string lpName);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern uint WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool GetOverlappedResult(
-            SafeHandle hDevice,
-            ref OVERLAPPED lpOverlapped,
-            out uint lpBytes,
-            bool bWait);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool CloseHandle(IntPtr hObject);
-
+        // Synchronous read, exactly like the control panel's own
+        // "Update Battery" button: the UM driver rejects overlapped I/O
+        // (ERROR_INVALID_PARAMETER), which is why the earlier overlapped
+        // implementation could never return a value.
         public static bool TryGetBattery(out int percent)
         {
             percent = -1;
-            SafeHandle hDevice = null;
+            Microsoft.Win32.SafeHandles.SafeFileHandle hDevice = null;
             IntPtr pOutBuffer = IntPtr.Zero;
-            IntPtr hEvent = IntPtr.Zero;
-            OVERLAPPED ov = new OVERLAPPED();
 
             try
             {
@@ -782,37 +742,18 @@ namespace AmtPtpControlPanel
                     FILE_SHARE_READ | FILE_SHARE_WRITE,
                     IntPtr.Zero,
                     OPEN_EXISTING,
-                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+                    0,
                     IntPtr.Zero);
 
                 if (hDevice == null || hDevice.IsInvalid)
                     return false;
 
                 pOutBuffer = Marshal.AllocHGlobal(4);
-                hEvent = CreateEvent(IntPtr.Zero, true, true, null);
-                ov.hEvent = hEvent;
+                Marshal.WriteInt32(pOutBuffer, 0, -1);
 
                 uint bytes;
-                bool issued = DeviceIoControl(
-                    hDevice, IOCTL_GET_BATTERY,
-                    IntPtr.Zero, 0,
-                    pOutBuffer, 4,
-                    out bytes,
-                    ref ov);
-
-                bool completed = issued;
-                if (!completed)
-                {
-                    int err = Marshal.GetLastWin32Error();
-                    if (err == ERROR_IO_PENDING)
-                        completed = WaitForSingleObject(hEvent, 1500) == WAIT_OBJECT_0;
-                }
-
-                if (!completed)
-                    return false;
-
-                uint bytesResult;
-                if (!GetOverlappedResult(hDevice, ref ov, out bytesResult, true))
+                if (!DeviceIoControl(hDevice, IOCTL_GET_BATTERY,
+                        IntPtr.Zero, 0, pOutBuffer, 4, out bytes, IntPtr.Zero))
                     return false;
 
                 int v = Marshal.ReadInt32(pOutBuffer);
@@ -823,10 +764,12 @@ namespace AmtPtpControlPanel
                 }
                 return false;
             }
+            catch
+            {
+                return false;
+            }
             finally
             {
-                if (hEvent != IntPtr.Zero)
-                    CloseHandle(hEvent);
                 if (pOutBuffer != IntPtr.Zero)
                     Marshal.FreeHGlobal(pOutBuffer);
                 if (hDevice != null)
@@ -834,4 +777,5 @@ namespace AmtPtpControlPanel
             }
         }
     }
+
 }

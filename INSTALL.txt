@@ -1,0 +1,127 @@
+Magic Trackpad for Windows - complete package
+=============================================
+
+This archive contains EVERYTHING needed on a fresh Windows host: the driver
+package, the code-signing certificates it needs, the tray control panel and
+the PowerShell utilities. One script installs all of it.
+
+--------------------------------------------------------------------------------
+QUICK START (new host, 3 steps)
+--------------------------------------------------------------------------------
+
+1. Extract this folder anywhere, e.g. C:\MagicTrackpad
+   (do not run it from inside the ZIP).
+
+2. Open an ADMIN PowerShell in that folder and run:
+
+       powershell -ExecutionPolicy Bypass -File .\install.ps1
+
+3. Accept the UAC prompt. The script
+
+       - trusts the driver certificate(s) from .\certs
+       - imports the driver package from .\driver  (pnputil /add-driver /install)
+       - re-scans the device tree and reports the trackpad state
+       - copies the control panel to %LOCALAPPDATA%\MagicTrackpad
+       - starts it (accept the second UAC prompt: the panel needs admin)
+
+Useful switches:
+
+       -Autostart            also register "start with Windows" (one UAC per logon)
+       -StartMinimized       with -Autostart: start straight into the tray
+       -DriverOnly           install only the driver + certificates
+       -SkipLaunch           install everything but do not start the panel
+       -InstallDir <path>    install the panel somewhere else
+       -Uninstall            remove panel, autostart, driver package, certificates
+
+--------------------------------------------------------------------------------
+WHAT IS IN THE ARCHIVE
+--------------------------------------------------------------------------------
+
+  install.ps1                  one-shot installer / uninstaller (this file's steps)
+  AmtPtpControlPanel.exe       tray control panel (elevated, single instance)
+  README.txt                   what the control panel does, option by option
+  INSTALL.txt                  this file
+  driver\AmtPtpDevice.inf      driver package (Windows 10 x64, VID 05AC + 27A7)
+  driver\AmtPtpDevice.cat      catalog signed by MtPtpSigner / MtRootCA
+  driver\AmtPtpDeviceUsbUm.dll user-mode WUDF driver
+  driver\AmtPtpHidFilter.sys   kernel HID filter
+  certs\MtRootCA.cer           root CA that must be trusted for the package
+  certs\MtPtpSigner.cer        the package's signing certificate
+  utility\MtTrackpad.ps1       setup / control utility (headless friendly)
+  utility\Verify-MtTrackpad.ps1 unattended PASS/FAIL verification
+  utility\Remove-MtCerts.ps1   removes the trusted test certificates again
+
+The utilities work on their own as well and find the driver folder
+automatically:
+
+       .\utility\MtTrackpad.ps1 install
+       .\utility\MtTrackpad.ps1 status
+       .\utility\Verify-MtTrackpad.ps1
+
+--------------------------------------------------------------------------------
+REQUIREMENTS
+--------------------------------------------------------------------------------
+
+  * Windows 10 or 11, x64
+  * Administrator rights (driver install + the control panel's elevated token)
+  * The trackpad connected by USB-C (first-time setup) or paired over Bluetooth
+  * Nothing else - no WDK, no Visual Studio, no .NET download (.NET 4.x ships
+    with Windows)
+
+--------------------------------------------------------------------------------
+MANUAL INSTALL (if you prefer doing it by hand)
+--------------------------------------------------------------------------------
+
+    # 1. trust the certificates (admin)
+    certutil -addstore -f Root            certs\MtRootCA.cer
+    certutil -addstore -f TrustedPublisher certs\MtPtpSigner.cer
+
+    # 2. import the driver (admin)
+    pnputil /add-driver driver\AmtPtpDevice.inf /install
+    pnputil /scan-devices
+
+    # 3. start the control panel (accept UAC)
+    .\AmtPtpControlPanel.exe
+
+--------------------------------------------------------------------------------
+TROUBLESHOOTING
+--------------------------------------------------------------------------------
+
+"pnputil ... failed / the driver package is not signed"
+      The certificate was not trusted. Re-run install.ps1 (it imports into
+      Root, CA and TrustedPublisher) and check with:
+          certutil -store Root | findstr /i mt
+          pnputil /enum-drivers | findstr /i amtptp
+
+Device present but "not started" / nothing reacts to the trackpad
+      Unplug and replug the USB-C cable, then re-run with -DriverOnly.
+      Check Device Manager: "Human Interface Devices" should show the
+      Magic Trackpad entries with no warning triangle.
+
+Battery shows "no reading"
+      Normal over USB-C - the trackpad only reports the battery over
+      Bluetooth. Pair it, then use the panel's Battery group.
+
+The tray icon shows only a grey "?"
+      Same reason: Bluetooth-only value. Over USB the panel says so instead
+      of inventing a number.
+
+Windows does not show the percentage as text next to the tray icon
+      Windows 10 has no such option at all and Windows 11 hides tray labels
+      by default. The number is therefore drawn inside the tray icon itself
+      and appears in the tray menu ("Show battery percentage in tray -
+      NN %"); the icon's Text/label carries the short value ("100%") for
+      systems that do show tray labels.
+
+Nothing happens on double-click / a second launch does not appear
+      The panel is single-instance and elevated: the first process owns the
+      tray icon. Use the tray menu -> "Open" (or double-click the icon).
+
+--------------------------------------------------------------------------------
+UNINSTALL
+--------------------------------------------------------------------------------
+
+       powershell -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall
+
+removes the panel folder, the autostart entry, the imported driver package
+and the two certificates again. (Log off/on afterwards to drop the tray icon.)

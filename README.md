@@ -24,20 +24,29 @@ Built on the open‑source [MagicTrackpad2ForWindows](https://github.com/vitopla
 ```
 magic-trackpad-windows/
 ├── README.md
+├── SETUP-NEW-HOST.md                # step‑by‑step setup for a fresh Windows machine
+├── INSTALL.txt                      # package quick start + manual driver steps
+├── install.ps1                      # one‑shot installer (driver + certs + panel)
+├── certs/                           # MtRootCA.cer + MtPtpSigner.cer (driver trust)
 ├── driver/                          # MagicTrackpad2ForWindows source (patched)
 │   ├── AmtPtpDeviceUsbUm/           #   user‑mode WUDF driver (C)
 │   ├── AmtPtpHidFilter/             #   kernel‑mode HID filter miniport (C)
 │   ├── AmtPtpControlPanel/          #   upstream WinForms control panel (C#)
-│   └── build/                       #   INFs + make.bat
-│       ├── AmtPtpDevice_AMD64.inf          # Win11 x64
-│       ├── AmtPtpDevice_ARM64.inf          # Win11 ARM64
-│       └── AmtPtpDevice_AMD64_WIN10.inf    # Windows 10 x64 (used on the streamer PC)
+│   ├── build/                       #   INFs + make.bat
+│   │   ├── AmtPtpDevice_AMD64.inf          # Win11 x64
+│   │   ├── AmtPtpDevice_ARM64.inf          # Win11 ARM64
+│   │   └── AmtPtpDevice_AMD64_WIN10.inf    # Windows 10 x64 (used on the streamer PC)
+│   └── prebuilt/win10-x64/          #   built + signed Windows 10 x64 package
 └── utility/
     ├── MtTrackpad.ps1               # setup & control utility (this is the main tool)
     ├── Verify-MtTrackpad.ps1        # unattended PASS/FAIL verification harness
     ├── Build-MtTrackpad.ps1         # non-interactive build + sign + inf2cat helper
+    ├── Remove-MtCerts.ps1           # untrust the test certificates again
     └── AmtPtpControlPanel-tray/     # tray control panel (source + build.ps1)
 ```
+
+**Full setup on a new machine → [SETUP-NEW-HOST.md](SETUP-NEW-HOST.md)** (or, from a release
+archive, `powershell -ExecutionPolicy Bypass -File .\install.ps1`).
 
 ## Devices supported
 
@@ -51,7 +60,9 @@ magic-trackpad-windows/
 
 ## Quick start (wired)
 
-Prereqs: an admin shell on the target PC, and the built driver package (see [Building](#building-the-driver)).
+Prereqs: an admin shell on the target PC, and the built driver package (see [Building](#building-the-driver)) —
+or skip the build entirely and run `install.ps1` from a release archive
+(see [SETUP-NEW-HOST.md](SETUP-NEW-HOST.md)).
 
 ```powershell
 # 1. Install the driver (trusts the signing cert, imports the package, binds the device)
@@ -176,15 +187,22 @@ Key differences from the upstream panel:
   hands over to an elevated copy (UAC) through a session‑scoped mutex + named event;
   the stub then exits, so exactly one elevated process owns the tray icon. Duplicate
   launches while an instance is running exit quietly (no extra UAC prompt).
-- **Battery percentage in the tray icon** — toggle *Show battery in tray*.
-  Bluetooth mode only: over USB‑C the trackpad is powered by the cable and the driver
-  reports no level, so the icon then falls back to the plain name tooltip.
+- **Battery percentage, visible without hovering** — *Show battery percentage in tray*
+  (tray menu and the settings window's Battery group mirror each other):
+  the tray icon itself is the number (large digits coloured by level, plus a charge bar),
+  the menu item reads `Show battery percentage in tray - NN %`, and the icon's Text/label
+  carries `NN%` for systems that display tray labels. Bluetooth mode only: over USB‑C the
+  trackpad is powered by the cable and reports no level (grey `?`). The value refreshes
+  every 5 s, immediately at launch (retries at 1/2/3 s) and whenever the settings window
+  is opened or re-focused.
 - **Explanatory tooltips** on every option (click feedback modes, gesture stopping by
   pressure or by contact size, palm rejection, finger filtering, the focus‑hack field…).
-- **Per‑user options** (*Start at login*, *Start minimized*) in
-  `HKCU\Software\MtTrackpad\Tray`. Autostart re‑runs the app after logon, which
-  triggers one UAC prompt; refusing it just leaves the app out of the tray until you
-  start it manually (the stub asks once, Retry/Exit).
+- **Startup options** — tray menu *Start with Windows* / *Start minimized* and the
+  settings window's **Startup** group (*Start automatically at login (one UAC prompt per
+  login)*, *Start hidden in system tray*), stored per user in
+  `HKCU\Software\MtTrackpad\Tray`; the Run entry is `Magic Trackpad`. Autostart re‑runs
+  the app after logon, which triggers one UAC prompt; refusing it just leaves the app out
+  of the tray until you start it manually (the stub asks once, Retry/Exit).
 
 Requirements: Windows 10/11 x64, the driver installed, and an account in **local
 Administrators** (opening the driver's control device needs an elevated token).

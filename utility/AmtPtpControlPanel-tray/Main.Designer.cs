@@ -388,7 +388,7 @@ namespace AmtPtpControlPanel
             this.ctlStartHidden.Name = "ctlStartHidden";
             this.ctlStartHidden.Size = new System.Drawing.Size(360, 24);
             this.ctlStartHidden.TabIndex = 1;
-            this.ctlStartHidden.Text = "Start hidden in system tray (with the option above)";
+            this.ctlStartHidden.Text = "Start hidden in system tray";
             this.ctlStartHidden.UseVisualStyleBackColor = true;
             // 
             // ctlBatteryGroupBox

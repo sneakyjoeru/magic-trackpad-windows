@@ -22,6 +22,7 @@
     wireless   List Bluetooth candidates / start pairing UI / report hardware IDs for INF extension
 
 .EXAMPLE
+    .\MtTrackpad.ps1 install        # auto-detects the driver folder in the release archive
     .\MtTrackpad.ps1 install -DriverDir C:\MtTrackpad\Driver
 .EXAMPLE
     .\MtTrackpad.ps1 configure -Feedback medium -Silent -StopPressure 50 -Palm on
@@ -328,36 +329,67 @@ function Restart-TrackpadDevices {
 
 # ============================= Actions =============================
 
+# Finds the driver package when -DriverDir was not given: looks next to this
+# script and one level up, accepting both the flat layout (driver\ with the
+# INF at the top) and the upstream layout (driver\AMD64\).
+function Resolve-DriverDir {
+    param([string]$Dir)
+
+    if ($Dir) { return $Dir }
+    $candidates = @(
+        $PSScriptRoot,
+        (Join-Path $PSScriptRoot 'driver'),
+        (Join-Path (Split-Path -Parent $PSScriptRoot) 'driver'),
+        (Split-Path -Parent $PSScriptRoot)
+    )
+    foreach ($c in $candidates) {
+        if (-not $c) { continue }
+        foreach ($rel in @('AmtPtpDevice.inf', 'AMD64\AmtPtpDevice.inf')) {
+            if (Test-Path (Join-Path $c $rel)) { return $c }
+        }
+    }
+    return $null
+}
+
 function Invoke-Install {
     param([string]$Dir)
 
     if (-not (Test-Admin)) { Write-Output "WARN: not running elevated; install may fail" }
-    if (-not $Dir) { throw "-DriverDir is required for install (must contain AMD64\AmtPtpDevice.inf)" }
-    $amd64 = Join-Path $Dir 'AMD64'
-    $inf = Join-Path $amd64 'AmtPtpDevice.inf'
+    $Dir = Resolve-DriverDir -Dir $Dir
+    if (-not $Dir) { throw "driver package not found - pass -DriverDir <folder containing AmtPtpDevice.inf>" }
+    $inf = Join-Path $Dir 'AMD64\AmtPtpDevice.inf'
+    if (-not (Test-Path $inf)) { $inf = Join-Path $Dir 'AmtPtpDevice.inf' }
     if (-not (Test-Path $inf)) { throw "Driver INF not found at $inf" }
 
     # 1. Trust our self-signed code-signing certificate (so the CAT validates).
     #    Import into LocalMachine\Root (CAT signature validation walks the root store)
     #    and LocalMachine\CA (legacy pnputil path).
-    $cer = Get-ChildItem -Path $Dir -Filter '*.cer' -Recurse | Select-Object -First 1
-    if ($cer) {
-        $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($cer.FullName)
-        foreach ($storeName in @('Root', 'CA')) {
-            try {
-                $store = New-Object System.Security.Cryptography.X509Certificates.X509Store($storeName, 'LocalMachine')
-                $store.Open('ReadWrite')
-                $store.Add($cert)
-                $store.Close()
-            } catch {
-                Write-Output "WARN: could not import cert into LocalMachine/${storeName}: $($_.Exception.Message)"
+    $cers = @(Get-ChildItem -Path $Dir -Filter '*.cer' -Recurse -ErrorAction SilentlyContinue)
+    if (-not $cers) {
+        $extra = Join-Path (Split-Path -Parent $PSScriptRoot) 'certs'
+        if (Test-Path $extra) { $cers = @(Get-ChildItem -Path $extra -Filter '*.cer' -Recurse) }
+    }
+    foreach ($cer in $cers) {
+        try {
+            $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($cer.FullName)
+            foreach ($storeName in @('Root', 'CA', 'TrustedPublisher')) {
+                try {
+                    $store = New-Object System.Security.Cryptography.X509Certificates.X509Store($storeName, 'LocalMachine')
+                    $store.Open('ReadWrite')
+                    $store.Add($cert)
+                    $store.Close()
+                } catch {
+                    Write-Output "WARN: could not import cert into LocalMachine/${storeName}: $($_.Exception.Message)"
+                }
             }
+            Write-Output "Trusted signing certificate: $($cert.Subject)"
+        } catch {
+            Write-Output "WARN: could not load $($cer.FullName): $($_.Exception.Message)"
         }
-        Write-Output "Trusted signing certificate: $($cert.Subject)"
     }
 
     # 2. Import the driver package
-    pnputil /add-driver "$amd64\AmtPtpDevice.inf" /install
+    pnputil /add-driver "$inf" /install
     if ($?) { Write-Output "Driver package imported." } else { Write-Output "pnputil add-driver reported an error (see pnputil output above)." }
 
     # 3. Bind the wired device to the driver (re-scan PnP)
