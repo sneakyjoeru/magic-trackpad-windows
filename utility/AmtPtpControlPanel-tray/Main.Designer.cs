@@ -58,6 +58,7 @@ namespace AmtPtpControlPanel
             this.ctlBatteryProgressBar = new AmtPtpControlPanel.ProgressBarWithPercentage();
             this.ctlBatteryGroupBox = new System.Windows.Forms.GroupBox();
             this.ctlBatteryUpdate = new System.Windows.Forms.Button();
+            this.ctlShowBatteryInTray = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.ctlFeedback)).BeginInit();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
@@ -343,14 +344,24 @@ namespace AmtPtpControlPanel
             this.ctlBatteryProgressBar.Size = new System.Drawing.Size(545, 23);
             this.ctlBatteryProgressBar.TabIndex = 12;
             this.ctlBatteryProgressBar.TextColor = System.Drawing.Color.White;
-            // 
+            //
+            // ctlShowBatteryInTray
+            //
+            this.ctlShowBatteryInTray.AutoSize = true;
+            this.ctlShowBatteryInTray.Location = new System.Drawing.Point(16, 64);
+            this.ctlShowBatteryInTray.Name = "ctlShowBatteryInTray";
+            this.ctlShowBatteryInTray.TabIndex = 16;
+            this.ctlShowBatteryInTray.Text = "Show battery % in tray";
+            this.ctlShowBatteryInTray.UseVisualStyleBackColor = true;
+            //
             // ctlBatteryGroupBox
-            // 
+            //
+            this.ctlBatteryGroupBox.Controls.Add(this.ctlShowBatteryInTray);
             this.ctlBatteryGroupBox.Controls.Add(this.ctlBatteryUpdate);
             this.ctlBatteryGroupBox.Controls.Add(this.ctlBatteryProgressBar);
             this.ctlBatteryGroupBox.Location = new System.Drawing.Point(13, 586);
             this.ctlBatteryGroupBox.Name = "ctlBatteryGroupBox";
-            this.ctlBatteryGroupBox.Size = new System.Drawing.Size(790, 75);
+            this.ctlBatteryGroupBox.Size = new System.Drawing.Size(790, 105);
             this.ctlBatteryGroupBox.TabIndex = 13;
             this.ctlBatteryGroupBox.TabStop = false;
             this.ctlBatteryGroupBox.Text = "Battery (only Bluetooth):";
@@ -369,7 +380,7 @@ namespace AmtPtpControlPanel
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(815, 675);
+            this.ClientSize = new System.Drawing.Size(815, 705);
             this.Controls.Add(this.ctlBatteryGroupBox);
             this.Controls.Add(this.groupBox4);
             this.Controls.Add(this.groupBox3);
@@ -429,6 +440,7 @@ namespace AmtPtpControlPanel
         private ProgressBarWithPercentage ctlBatteryProgressBar;
         private System.Windows.Forms.GroupBox ctlBatteryGroupBox;
         private System.Windows.Forms.Button ctlBatteryUpdate;
+        private System.Windows.Forms.CheckBox ctlShowBatteryInTray;
     }
 }
 

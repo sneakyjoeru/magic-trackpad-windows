@@ -25,6 +25,8 @@ namespace AmtPtpControlPanel
         private System.Windows.Forms.Timer trayTimer;
         private int lastBatteryPercent = -1;
         private bool hiddenOnStartup = false;
+        private bool trayExitRequested = false;
+        private int trayCloseCount = 0;
         private System.Windows.Forms.ToolTip tipOptions;
 
         private void TrayWire(string[] args)
@@ -45,6 +47,29 @@ namespace AmtPtpControlPanel
                         hiddenOnStartup = true;
 
             this.Load += (s, e) => InitTray();
+            this.FormClosing += (s, e) =>
+            {
+                try
+                {
+                    if (trayIcon == null || trayExitRequested)
+                        return;
+                    trayCloseCount += 1;
+                    if (trayCloseCount == 1)
+                    {
+                        // first close: park in the tray instead of quitting
+                        WindowState = FormWindowState.Minimized;
+                        ShowInTaskbar = false;
+                        Visible = false;
+                        trayIcon.BalloonTipTitle = "Magic Trackpad";
+                        trayIcon.BalloonTipText = "Window hidden - the app now lives in the tray icon (right-click it). Press the window close button a second time or use 'Exit' in the icon menu to really quit.";
+                        trayIcon.ShowBalloonTip(5000);
+                        e.Cancel = true;
+                    }
+                }
+                catch
+                {
+                }
+            };
             this.FormClosed += (s, e) => DisposeTray();
         }
 
@@ -140,6 +165,7 @@ namespace AmtPtpControlPanel
                 miShowBattery.Click += (s, e) =>
                 {
                     TraySetInt("ShowBattery", miShowBattery.Checked ? 1 : 0);
+                    ctlShowBatteryInTray.Checked = miShowBattery.Checked;
                     RefreshTray();
                 };
 
@@ -180,6 +206,7 @@ namespace AmtPtpControlPanel
                     "in the user registry, so they survive restarts.";
                 miExit.Click += (s, e) =>
                 {
+                    trayExitRequested = true;
                     DisposeTray();
                     Close();
                 };
@@ -193,6 +220,15 @@ namespace AmtPtpControlPanel
                 trayMenu.Items.Add(new ToolStripSeparator());
                 trayMenu.Items.Add(miOpen);
                 trayMenu.Items.Add(miExit);
+
+                // settings-window twin of the menu option (bidirectional sync)
+                ctlShowBatteryInTray.Checked = SettingShowBattery;
+                ctlShowBatteryInTray.CheckedChanged += (s, e) =>
+                {
+                    TraySetInt("ShowBattery", ctlShowBatteryInTray.Checked ? 1 : 0);
+                    miShowBattery.Checked = ctlShowBatteryInTray.Checked;
+                    RefreshTray();
+                };
 
                 trayIcon = new NotifyIcon();
                 trayIcon.Icon = LoadEmbeddedIcon(16);
@@ -273,12 +309,17 @@ namespace AmtPtpControlPanel
                         // short Text next to the icon = the percentage itself;
                         // the full sentence stays in the menu
                         miBatteryItem.Text = "Battery: " + lastBatteryPercent + " %";
-                        trayIcon.Text = lastBatteryPercent + " %";
+                        // .NET 4.0 NotifyIcon.Text serves BOTH as the small label
+                        // next to the icon and as the hover tooltip, so one string
+                        // covers both surfaces (Win11 hides the label unless the
+                        // system "show labels" setting is on, but the hover always
+                        // shows this full text)
+                        trayIcon.Text = "Magic Trackpad - " + lastBatteryPercent + " %";
                     }
                     else
                     {
                         miBatteryItem.Text = "Battery: not available";
-                        trayIcon.Text = "Magic Trackpad";
+                        trayIcon.Text = "Magic Trackpad (battery not available over USB)";
                     }
                 }
                 else
@@ -392,6 +433,12 @@ namespace AmtPtpControlPanel
                 tipOptions.SetToolTip(ctlBatteryUpdate,
                     "Reads the current battery percentage from the driver right now. " +
                     "Refuses silently in USB mode - connect via Bluetooth to use it.");
+                tipOptions.SetToolTip(ctlShowBatteryInTray,
+                    "When on, the battery percentage is drawn next to the tray icon " +
+                    "(the icon's hover tooltip carries it as well, and the " +
+                    "'Battery:' line in the tray menu always does). Bluetooth mode " +
+                    "only - in USB mode the driver exposes no level. Same switch " +
+                    "also in the right-click menu of the tray icon.");
                 tipOptions.SetToolTip(ctlApply,
                     "Saves all options to the driver configuration and applies them " +
                     "immediately - the running driver picks them up without a reboot.");
