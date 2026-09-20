@@ -61,6 +61,13 @@ Tray control panel (right‑click the tray icon):
   icon's label (`100%`). Read every 5 s while the window is focused, every 10 minutes while the
   app sits unfocused in the tray, and immediately on launch, on opening the window and on
   opening the tray menu. Bluetooth only — over USB‑C it shows a grey `?`.
+- **Force click (optional)** — a firm press can act as a second click: right mouse button
+  (default), middle mouse button, double left click, mouse back/forward, Ctrl + Left click,
+  Enter, or nothing, with a tunable pressure threshold. Pressure only exists inside the driver,
+  so this needs the optional **self-signed force-click driver** (test signing on that machine) —
+  see `FORCE-CLICK.txt` in the "(force click, self-signed)" archive. The driver signals a named
+  event and the panel performs the action with `SendInput` (event driven, no polling); with the
+  Microsoft-signed driver the option stays inert.
 - **Startup** — *Start with Windows* / *Start minimized*, mirrored as the settings window's
   **Startup** group. Stored per user in `HKCU\Software\MtTrackpad\Tray`; one UAC prompt per logon.
 - Runs elevated, always, and only once (a single elevated process owns the tray icon). Starting
