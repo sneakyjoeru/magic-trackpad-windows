@@ -42,6 +42,11 @@ WHAT IS IN THE ARCHIVE
 
   Install.cmd                  DOUBLE-CLICK THIS - asks for admin rights once and
                                runs install.ps1 (optional arguments are passed on)
+  Install-Microsoft-Signed.cmd the same, but installs the Microsoft-signed driver
+                               (driver-ms-signed\) - needed on machines where the
+                               self-signed kernel filter cannot load (Windows 11 /
+                               Secure Boot / test signing off). Add -Clean to wipe
+                               old Apple/trackpad drivers first
   Uninstall.cmd                the reverse: panel, autostart, driver, certificates
   Uninstall-All-Apple-Drivers.cmd
                                clean slate: removes EVERY known Apple / Magic
@@ -147,6 +152,11 @@ The panel says "Failed to open device. Error: 2"
         3. run Uninstall-All-Apple-Drivers.cmd (clean slate), replug, reboot,
            then Install.cmd; Install.cmd -Clean does 3 + install in one pass.
 
+      Bluetooth trackpad on Windows 11 (build 22000+) with Secure Boot?
+      Then it is the driver signature - see below. Quickest fix: double-click
+      Install-Microsoft-Signed.cmd -Clean, wait for it to finish, then
+      unplug/replug the trackpad (or remove + re-pair Bluetooth).
+
       If it still fails, it is almost always the DRIVER SIGNATURE:
         * this package is SELF-SIGNED, and its kernel driver
           (AmtPtpHidFilter.sys) only loads when Windows test signing is on.
@@ -155,7 +165,12 @@ The panel says "Failed to open device. Error: 2"
           (Secure Boot has to be OFF for that; Windows will show "Test Mode")
         * or skip test signing entirely and install the Microsoft-signed package
           that ships in driver-ms-signed\:
-                 Install.cmd -SignedDriver
+                 Install-Microsoft-Signed.cmd        (double-click)
+                 Install.cmd -SignedDriver           (same thing)
+          Note: our self-signed INF has the newer DriverVer, so if BOTH packages
+          are installed Windows may keep preferring the one that cannot load -
+          remove the old one first with Uninstall-All-Apple-Drivers.cmd, or use
+          Install-Microsoft-Signed.cmd -Clean.
           It is signed by Microsoft's Hardware Compatibility Publisher, so it
           loads on any Windows 10/11 - but it only covers the real Apple vendor
           IDs (VID 05AC), not the VID 27A7 clones.

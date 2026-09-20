@@ -188,12 +188,22 @@ bcdedit /set testsigning on      # Secure Boot must be OFF, then reboot
 # Windows shows "Test Mode" on the desktop afterwards
 ```
 
-If test signing cannot be enabled (Secure Boot on, corporate policy), install the
-**Microsoft-signed** package instead — no certificates, no test mode:
+If test signing cannot be enabled (Secure Boot on, corporate policy, Windows 11),
+install the **Microsoft-signed** package instead — no certificates, no test mode:
 
-```powershell
-.\Install.cmd -SignedDriver
 ```
+Install-Microsoft-Signed.cmd            (double-click; or Install.cmd -SignedDriver)
+Install-Microsoft-Signed.cmd -Clean     (also wipes old Apple/trackpad drivers first)
+```
+
+> Our self-signed INF carries the newer `DriverVer`, so when both packages are installed Windows
+> can keep preferring the one that cannot load. Remove the old package first
+> (`Uninstall-All-Apple-Drivers.cmd`, or use the `-Clean` form above).
+
+Typical report from such a machine: Windows 11 (build 26200), `testsigning` off, the trackpad
+connected over Bluetooth, `AmtPtpHidFilter` service present but **Stopped**, the Bluetooth HID
+collection `...VID&0001004C_PID&0324&COL01...` in state **Error**, and the control-device probe
+failing with error 2 - the Microsoft-signed package fixes exactly that.
 
 Symptom of getting this wrong: the panel (or `Diagnose.cmd`) reports
 *"Failed to open device. Error: 2"* because the trackpad never binds to the driver.
