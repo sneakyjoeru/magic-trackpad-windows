@@ -24,17 +24,17 @@ namespace AmtPtpControlPanel
         private ToolStripMenuItem miStartMin;
         private System.Windows.Forms.Timer trayTimer;
         private int lastBatteryPercent = -1;
+        private System.DateTime lastUiRefresh = System.DateTime.MinValue;
         private bool hiddenOnStartup = false;
         private bool trayExitRequested = false;
         private int trayCloseCount = 0;
         private System.Windows.Forms.ToolTip tipOptions;
         private Icon iconBase16;
-        private Icon iconFull;
-        private Icon iconHigh;
-        private Icon iconMed;
-        private Icon iconLow;
-        private Icon iconEmpty;
         private Icon iconNa;
+        // one icon per percentage value actually reported: the tray icon
+        // carries the literal number so the level is visible even where
+        // Windows 11 hides the text next to tray icons
+        private System.Collections.Generic.Dictionary<int, Icon> iconByPercent;
 
         private void TrayWire(string[] args)
         {
@@ -78,6 +78,18 @@ namespace AmtPtpControlPanel
                 }
             };
             this.FormClosed += (s, e) => DisposeTray();
+            // focusing the window (any way the user opens it) forces a
+            // fresh battery read; the same-UI-thread WinForms timer means
+            // this can never race with the 5 s background refresh
+            this.Activated += (s, e) =>
+            {
+                if ((System.DateTime.Now - lastUiRefresh)
+                        .TotalMilliseconds > 1000)
+                {
+                    lastUiRefresh = System.DateTime.Now;
+                    RefreshTray();
+                }
+            };
         }
 
         protected override void OnShown(EventArgs e)
@@ -102,6 +114,11 @@ namespace AmtPtpControlPanel
                 {
                 }
             }
+            // opening the settings window always triggers an immediate battery
+            // read, so the number, the menu line and the icon are fresh the
+            // moment the UI comes up (not just at the next 5 s tick)
+            lastUiRefresh = System.DateTime.MinValue;
+            RefreshTray();
         }
 
         //=================
@@ -342,14 +359,19 @@ namespace AmtPtpControlPanel
                         // tooltip with the exact number
                         if (PickBatteryIcon(lastBatteryPercent) != null)
                             trayIcon.Icon = PickBatteryIcon(lastBatteryPercent);
-                        trayIcon.Text = "Magic Trackpad - battery " + lastBatteryPercent + " %";
+                        // the tooltip repeats the exact menu phrasing, so the
+                        // full "Show battery percentage in tray" wording is
+                        // visible right in the tray on hover
+                        trayIcon.Text = "Show battery percentage in tray - "
+                                + lastBatteryPercent + " %";
                     }
                     else
                     {
                         miBatteryItem.Text = "Battery: not available";
                         if (iconNa != null)
                             trayIcon.Icon = iconNa;
-                        trayIcon.Text = "Magic Trackpad (no battery reading in USB mode)";
+                        trayIcon.Text = "Show battery percentage in tray - "
+                                + "no reading in USB mode";
                     }
                 }
                 else
@@ -365,17 +387,41 @@ namespace AmtPtpControlPanel
             }
         }
 
+        // Battery glyph with the actual percentage drawn inside the cell:
+        // green (>= 50 %), amber (>= 25 %), red (below). The per-percent
+        // icons are built lazily and cached; at most a handful exist per
+        // process lifetime, so the small native-handle cost is accepted
+        // (icons are never destroyed - see the note on MakeBatteryIcon).
         private Icon PickBatteryIcon(int pct)
         {
-            if (pct >= 90)
-                return iconFull;
-            if (pct >= 50)
-                return iconHigh;
-            if (pct >= 25)
-                return iconMed;
-            if (pct >= 10)
-                return iconLow;
-            return iconEmpty;
+            Icon cached;
+            if (iconByPercent == null)
+                iconByPercent = new System.Collections.Generic.Dictionary<int, Icon>();
+            if (iconByPercent.TryGetValue(pct, out cached))
+                return cached;
+
+            Color fill = Color.FromArgb(40, 190, 90);
+            Color digit = Color.FromArgb(20, 25, 20);
+            if (pct < 10)
+            {
+                fill = Color.FromArgb(205, 55, 45);
+                digit = Color.FromArgb(250, 250, 250);
+            }
+            else if (pct < 25)
+            {
+                fill = Color.FromArgb(240, 80, 60);
+                digit = Color.FromArgb(250, 250, 250);
+            }
+            else if (pct < 50)
+            {
+                fill = Color.FromArgb(245, 195, 40);
+            }
+
+            Icon built = MakeBatteryIcon(pct / 100f, fill,
+                Color.FromArgb(235, 235, 235), pct.ToString(), digit);
+            if (built != null)
+                iconByPercent[pct] = built;
+            return built;
         }
 
         private void BuildBatteryIcons()
@@ -385,26 +431,17 @@ namespace AmtPtpControlPanel
                 iconBase16 = LoadEmbeddedIcon(16);
 
                 Color border = Color.FromArgb(235, 235, 235);
-                Color green = Color.FromArgb(40, 190, 90);
-                Color amber = Color.FromArgb(245, 195, 40);
-                Color red = Color.FromArgb(240, 80, 60);
                 Color gray = Color.FromArgb(160, 160, 160);
 
-                iconFull = MakeBatteryIcon(1.0f, green, border);
-                iconHigh = MakeBatteryIcon(0.75f, green, border);
-                iconMed = MakeBatteryIcon(0.5f, amber, border);
-                iconLow = MakeBatteryIcon(0.3f, red, border);
-                iconEmpty = MakeBatteryIcon(0.1f, red, border);
-                iconNa = MakeBatteryIcon(0.5f, gray, gray);
+                iconByPercent =
+                    new System.Collections.Generic.Dictionary<int, Icon>();
+                iconNa = MakeBatteryIcon(0.5f, gray, gray, "?",
+                    Color.FromArgb(240, 240, 240));
             }
             catch
             {
                 iconBase16 = null;
-                iconFull = null;
-                iconHigh = null;
-                iconMed = null;
-                iconLow = null;
-                iconEmpty = null;
+                iconByPercent = null;
                 iconNa = null;
             }
         }
@@ -412,7 +449,8 @@ namespace AmtPtpControlPanel
         // Draws a 16x16 battery glyph: outlined cell with a terminal nub,
         // interior filled up to `frac`. Result is a real Icon suitable for
         // NotifyIcon.Icon so the level is visible at a glance in the tray.
-        private Icon MakeBatteryIcon(float frac, Color fill, Color border)
+        private Icon MakeBatteryIcon(float frac, Color fill, Color border,
+                string digits, Color digitColor)
         {
             Bitmap bmp = new Bitmap(16, 16);
             using (Graphics g = Graphics.FromImage(bmp))
@@ -422,30 +460,36 @@ namespace AmtPtpControlPanel
 
                 using (Pen p = new Pen(border))
                 {
-                    g.DrawRectangle(p, 1, 4, 11, 8);      // cell body outline
-                    g.FillRectangle(new SolidBrush(border), 12, 6, 2, 4); // terminal
+                    g.DrawRectangle(p, 0, 3, 14, 10);     // cell body outline
+                    g.FillRectangle(new SolidBrush(border), 14, 6, 1, 4); // terminal
                 }
 
                 if (frac > 0f)
                 {
-                    int w = (int)(11 * frac);
-                    if (w > 11)
-                        w = 11;
+                    int w = (int)(12 * frac);
+                    if (w > 12)
+                        w = 12;
                     if (w < 1)
                         w = 1;
                     using (SolidBrush b = new SolidBrush(fill))
                     {
-                        g.FillRectangle(b, 2, 5, w, 6);
+                        g.FillRectangle(b, 1, 4, w, 8);   // interior fill
                     }
                 }
 
-                if (fill == border)
+                if (digits != null && digits.Length > 0)
                 {
-                    // "no reading" glyph: draw a ? inside
-                    using (Font f = new Font(FontFamily.GenericSansSerif, 7f, FontStyle.Bold))
-                    using (SolidBrush b = new SolidBrush(Color.FromArgb(240, 240, 240)))
+                    // digits rendered with GDI (crisp at 16 px) and centered
+                    // in the interior; for the "no reading" glyph digits is "?"
+                    using (Font f = new Font("Arial",
+                        digits.Length > 1 ? 6.5f : 8.5f,
+                        FontStyle.Bold, GraphicsUnit.Pixel))
                     {
-                        g.DrawString("?", f, b, 4f, 4.5f);
+                        TextRenderer.DrawText(g, digits, f,
+                            new Rectangle(1, 4, 12, 8), digitColor,
+                            TextFormatFlags.HorizontalCenter |
+                            TextFormatFlags.VerticalCenter |
+                            TextFormatFlags.NoPadding);
                     }
                 }
             }
