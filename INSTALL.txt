@@ -56,7 +56,12 @@ WHAT IS IN THE ARCHIVE
   AmtPtpControlPanel.exe       tray control panel (elevated, single instance)
   README.txt                   what the control panel does, option by option
   INSTALL.txt                  this file
-  driver\AmtPtpDevice.inf      driver package (Windows 10 x64, VID 05AC + 27A7)
+  driver\AmtPtpDevice.inf      self-signed driver package (VID 05AC + 27A7)
+                               NOTE: its kernel filter needs test signing ON:
+                               bcdedit /set testsigning on   (then reboot)
+  driver-ms-signed\            the same driver, Microsoft-signed - needs no test
+                               signing. Use it if you cannot enable test signing:
+                               install.ps1 -SignedDriver   (or Install.cmd -SignedDriver)
   driver\AmtPtpDevice.cat      catalog signed by MtPtpSigner / MtRootCA
   driver\AmtPtpDeviceUsbUm.dll user-mode WUDF driver
   driver\AmtPtpHidFilter.sys   kernel HID filter
@@ -134,6 +139,33 @@ Starting the panel seems to do nothing / no window appears
       (%LOCALAPPDATA%\MagicTrackpad\panel-error.log).
 
 The panel says "Failed to open device. Error: 2"
+      First check the usual suspects:
+        1. replug the USB-C cable (or remove + re-pair Bluetooth), then run
+           Install.cmd again;
+        2. reboot once - a stuck WUDF host or a stale device instance is common
+           right after moving the trackpad between PCs;
+        3. run Uninstall-All-Apple-Drivers.cmd (clean slate), replug, reboot,
+           then Install.cmd; Install.cmd -Clean does 3 + install in one pass.
+
+      If it still fails, it is almost always the DRIVER SIGNATURE:
+        * this package is SELF-SIGNED, and its kernel driver
+          (AmtPtpHidFilter.sys) only loads when Windows test signing is on.
+          Check with:      bcdedit | findstr /i testsigning
+          Enable + reboot: bcdedit /set testsigning on
+          (Secure Boot has to be OFF for that; Windows will show "Test Mode")
+        * or skip test signing entirely and install the Microsoft-signed package
+          that ships in driver-ms-signed\:
+                 Install.cmd -SignedDriver
+          It is signed by Microsoft's Hardware Compatibility Publisher, so it
+          loads on any Windows 10/11 - but it only covers the real Apple vendor
+          IDs (VID 05AC), not the VID 27A7 clones.
+
+      The installer also prints the state of every connected trackpad device and
+      whether test signing / Secure Boot are on. Diagnose.cmd collects all of it.
+
+Legacy text follows.
+
+The panel says "Failed to open device. Error: 2" (older notes)
       Error 2 = the driver's control device (\\.\AmtPtpControlDeviceUm) does not
       exist, which means the trackpad is not bound to this driver (yet). In
       order:

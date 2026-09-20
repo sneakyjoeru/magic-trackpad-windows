@@ -170,6 +170,34 @@ started.
 
 ---
 
+## Driver signing: self-signed vs Microsoft-signed
+
+The archive ships **two** driver packages:
+
+| folder | signature | needs test signing | covers |
+|---|---|---|---|
+| `driver\` | self-signed (`MtPtpSigner` / `MtRootCA`, trusted by `install.ps1`) | **yes** | VID `05AC` (all listed PIDs incl. `0324`, `0265`) + VID `27A7` clones |
+| `driver-ms-signed\` | Microsoft Hardware Compatibility Publisher | no | VID `05AC` (incl. Bluetooth `0324`/`0265`) |
+
+The self-signed **user-mode** driver installs on any machine once its certificate is trusted, but
+its **kernel** filter (`AmtPtpHidFilter.sys`, which carries the Bluetooth bindings and the
+precision touchpad filter) only loads when Windows **test signing** is on:
+
+```powershell
+bcdedit /set testsigning on      # Secure Boot must be OFF, then reboot
+# Windows shows "Test Mode" on the desktop afterwards
+```
+
+If test signing cannot be enabled (Secure Boot on, corporate policy), install the
+**Microsoft-signed** package instead — no certificates, no test mode:
+
+```powershell
+.\Install.cmd -SignedDriver
+```
+
+Symptom of getting this wrong: the panel (or `Diagnose.cmd`) reports
+*"Failed to open device. Error: 2"* because the trackpad never binds to the driver.
+
 ## Moving the trackpad to another PC / "Failed to open device. Error: 2"
 
 The control panel opens the driver's control device
@@ -207,8 +235,9 @@ Third-party trackpad tools install their own filter and take the device over -
 uninstall **Magic Utilities** and **Trackpad++** through *Apps & features*
 before installing this driver. The cleanup script reports them if it finds them.
 
-If the control device is still missing afterwards, send the device list the
-installer prints: the driver INF covers `USB\VID_05AC&PID_0324`,
+If the control device is still missing afterwards, check `bcdedit | findstr /i testsigning`
+(lines 1-2 of the list above) and use `-SignedDriver` if it says `No` — then send the device list
+the installer prints: the driver INF covers `USB\VID_05AC&PID_0324`,
 `USB\VID_27A7&PID_2501/9601` and the Bluetooth HID form of `PID_0324`; any
 other Apple trackpad PID needs to be added to the INF and re-signed.
 

@@ -54,9 +54,14 @@ Add-Cmd 'version' {
     "$($k.ProductName) $($k.DisplayVersion) build $($k.CurrentBuild).$($k.UBR)"
     "installed on  : $($k.InstallDate)"
 }
-Add-Cmd 'secure boot / test signing' {
-    try { "SecureBoot: " + (Confirm-SecureBootUEFI) } catch { "SecureBoot: unknown ($($_.Exception.Message))" }
-    "bcdedit testsigning: " + ((bcdedit /enum '{current}' 2>$null | Select-String 'testsigning').ToString().Trim())
+Add-Cmd 'test signing / secure boot (needed by the self-signed kernel filter)' {
+    $bd = @(& bcdedit.exe /enum '{current}' 2>$null)
+    $ts = @($bd | Select-String 'testsigning')
+    if ($ts.Count -gt 0) { "bcdedit : " + $ts[0].ToString().Trim() }
+    else { "bcdedit : testsigning not set -> OFF (the self-signed kernel filter cannot load)" }
+    try { "secure boot : " + (Confirm-SecureBootUEFI) } catch { "secure boot : cannot query (legacy BIOS, or not elevated)" }
+    "note        : 'testsigning Yes' is required for the SELF-SIGNED package; the" 
+    "              Microsoft-signed package (driver-ms-signed\) needs neither."
 }
 
 Add-Section 'control panel process'
@@ -175,6 +180,15 @@ public class MtCd {
     else {
         $e = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
         "OPEN FAILED - Win32 error $e  (2 = not bound/no device, 5 = not elevated)"
+        if ($e -eq 2) {
+            'verdict     : the trackpad is not bound to this driver. Check, in order:'
+            '  1. test signing (see the section above) - without it the self-signed'
+            '     kernel filter never loads: bcdedit /set testsigning on + reboot'
+            '     (Secure Boot off), or install driver-ms-signed\ (Install.cmd -SignedDriver)'
+            '  2. replug the trackpad, then reboot - stale device instances'
+            '  3. Uninstall-All-Apple-Drivers.cmd, replug, reboot, Install.cmd'
+            '  4. the hardware ID may not be in the INF - see the device list above'
+        }
     }
 }
 Add-Cmd 'AmtPtpHidFilter service' {

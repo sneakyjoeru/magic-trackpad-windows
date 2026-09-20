@@ -21,6 +21,11 @@
         -InstallDir <path>   where the control panel is copied
                              (default: %LOCALAPPDATA%\MagicTrackpad)
         -DriverOnly          only trust the certs + install the driver
+        -SignedDriver        install the Microsoft-signed driver package
+                             (driver-ms-signed\) instead of the self-signed one.
+                             Use this when test signing cannot be enabled - the
+                             self-signed kernel filter only loads with
+                             "bcdedit /set testsigning on".
         -Clean               first remove every known Apple/trackpad driver and
                              leftover device instance (clean slate), then install
         -Autostart           add the per-user Run entry (one UAC per logon)
@@ -35,6 +40,7 @@
 param(
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'MagicTrackpad'),
     [switch]$DriverOnly,
+    [switch]$SignedDriver,
     [switch]$Clean,
     [switch]$Autostart,
     [switch]$StartMinimized,
@@ -46,6 +52,10 @@ param(
 $ErrorActionPreference = 'Stop'
 $root      = Split-Path -Parent $MyInvocation.MyCommand.Path
 $driverDir = Join-Path $root 'driver'
+if ($SignedDriver) {
+    $signedDir = Join-Path $root 'driver-ms-signed'
+    if (Test-Path $signedDir) { $driverDir = $signedDir }
+}
 $certDir   = Join-Path $root 'certs'
 $appName   = 'AmtPtpControlPanel.exe'
 $appSrc    = Join-Path $root $appName
@@ -122,14 +132,49 @@ function Get-ExistingDriverPackages {
     return $published
 }
 
+function Get-InstalledDriverKind {
+    # Windows keeps the imported package under DriverStore\FileRepository\amtptpdevice.inf_*
+    # Reading the catalogue's signer tells us whether the installed package is
+    # ours (self-signed) or the Microsoft-signed one.
+    $kinds = @()
+    $repo = Join-Path $env:windir 'System32\DriverStore\FileRepository'
+    foreach ($dir in (Get-ChildItem $repo -Directory -Filter 'amtptpdevice.inf_*' -ErrorAction SilentlyContinue)) {
+        foreach ($cat in (Get-ChildItem $dir.FullName -Filter '*.cat' -ErrorAction SilentlyContinue)) {
+            $subject = ''
+            try { $subject = (Get-AuthenticodeSignature $cat.FullName).SignerCertificate.Subject } catch { }
+            if ($subject -match 'Microsoft') { $kinds += 'microsoft' }
+            elseif ($subject) { $kinds += 'self-signed' }
+            else { $kinds += 'unknown' }
+        }
+    }
+    return @($kinds | Select-Object -Unique)
+}
+
 function Install-Driver {
     $inf = Get-DriverInf
     if (-not $inf) { throw "driver INF not found - expected driver\AmtPtpDevice.inf inside the archive" }
 
     $existing = @(Get-ExistingDriverPackages)
-    if ($existing.Count -gt 0) {
-        Write-Step "driver package already present ($($existing -join ', ')) - re-binding instead of importing a copy"
-    } else {
+    $installedKinds = @(Get-InstalledDriverKind)
+    # no ternary operator: Windows PowerShell 5.1 does not have one
+    $want = 'self-signed'
+    if ($SignedDriver) { $want = 'microsoft' }
+    $have = $installedKinds -contains $want
+
+    if ($want -eq 'microsoft') {
+        if ($have) {
+            Write-Step 'Microsoft-signed package already installed - re-binding'
+        } else {
+            Write-Step 'importing the Microsoft-signed driver package'
+            if ($existing.Count -gt 0) {
+                Write-Warn2 "an older self-signed package is also present ($($existing -join ', ')) - it can be removed later with Uninstall-All-Apple-Drivers.cmd"
+            }
+        }
+    } elseif ($have) {
+        Write-Step "self-signed package already installed ($($existing -join ', ')) - re-binding instead of importing a copy"
+    }
+
+    if (-not $have) {
         Write-Step "importing driver package ($inf)"
         $out = & pnputil.exe /add-driver "$inf" /install 2>&1
         $out | ForEach-Object { Write-Host "    $_" }
@@ -137,11 +182,25 @@ function Install-Driver {
             throw "pnputil /add-driver failed (exit $LASTEXITCODE)"
         }
         Write-Ok 'driver package imported'
+    } else {
+        Write-Ok ("installed package kind: " + ($installedKinds -join ', '))
     }
 
     Write-Step 're-scanning devices'
     & pnputil.exe /scan-devices | Out-Null
     Start-Sleep -Seconds 4
+}
+
+function Get-TestSigningState {
+    try {
+        $out = (& bcdedit.exe /enum '{current}' 2>$null) -join "`n"
+        if ($out -match 'testsigning\s+(\w+)') { return $Matches[1] }
+    } catch { }
+    return 'unknown'
+}
+
+function Get-SecureBootState {
+    try { return (Confirm-SecureBootUEFI) } catch { return 'unknown' }
 }
 
 function Get-ConnectedTrackpadDevices {
@@ -210,6 +269,17 @@ function Show-ControlDeviceState {
         default { Write-Host "    Win32 error $($probe.Error) while opening the driver control device." }
     }
     Write-Host '    The control panel would report "Failed to open device. Error: 2".'
+    $ts = Get-TestSigningState
+    $sb = Get-SecureBootState
+    Write-Host "    test signing: $ts    secure boot: $sb"
+    if ($ts -ne 'Yes' -and -not $SignedDriver) {
+        Write-Host ''
+        Write-Host '    *** The self-signed package cannot load its KERNEL driver without test signing.' -ForegroundColor Yellow
+        Write-Host '        Enable it, then reboot:      bcdedit /set testsigning on' -ForegroundColor Yellow
+        Write-Host '        (Secure Boot has to be off for that), or install the Microsoft-signed' -ForegroundColor Yellow
+        Write-Host '        package instead, which needs no test signing:  Install.cmd -SignedDriver' -ForegroundColor Yellow
+        Write-Host ''
+    }
     Write-Host '    Fix, in order:'
     Write-Host '      1. unplug the USB-C cable and plug it back in (or remove + re-pair Bluetooth), then run this installer again'
     Write-Host '      2. reboot once - a WUDF host or a stale device instance can be stuck'
@@ -378,8 +448,12 @@ try {
         }
     }
 
-    Write-Step 'trusting the driver certificate(s)'
-    Import-DriverCerts
+    if ($SignedDriver) {
+        Write-Step 'Microsoft-signed package selected - no certificate to trust'
+    } else {
+        Write-Step 'trusting the driver certificate(s)'
+        Import-DriverCerts
+    }
 
     Install-Driver
     $deviceOk = Show-DeviceState
