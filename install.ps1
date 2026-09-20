@@ -1,6 +1,9 @@
 <#
-    Magic Trackpad for Windows - one-shot installer
-    ===============================================
+    Apple Magic Trackpad Setup Utility + Drivers v1.0 - installer
+    ============================================================
+
+    (Driver + panel from vitoplantamura/MagicTrackpad2ForWindows and
+     imbushuo/mac-precision-touchpad - see README.txt for full attribution.)
 
     Installs EVERYTHING that is needed on a fresh Windows host:
 
@@ -401,11 +404,35 @@ function Remove-Autostart {
     }
 }
 
+function Remove-Shortcuts {
+    foreach ($link in @(
+        (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Magic Trackpad.lnk'),
+        (Join-Path $env:PUBLIC 'Desktop\Magic Trackpad.lnk'),
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Magic Trackpad.lnk')
+    )) {
+        if ($link -and (Test-Path $link)) { Remove-Item $link -Force -ErrorAction SilentlyContinue; Write-Ok "removed $link" }
+    }
+}
+
+function Stop-ControlPanel {
+    $procs = @(Get-Process -Name 'AmtPtpControlPanel' -ErrorAction SilentlyContinue)
+    if ($procs.Count -eq 0) { Write-Info 'control panel is not running'; return }
+    Write-Step "closing the control panel ($($procs.Count) process(es))"
+    foreach ($p in $procs) {
+        try { $p.CloseMainWindow() | Out-Null } catch { }
+    }
+    Start-Sleep -Seconds 1
+    $left = @(Get-Process -Name 'AmtPtpControlPanel' -ErrorAction SilentlyContinue)
+    foreach ($p in $left) { try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch { } }
+    Start-Sleep -Milliseconds 500
+    $left2 = @(Get-Process -Name 'AmtPtpControlPanel' -ErrorAction SilentlyContinue)
+    if ($left2.Count -eq 0) { Write-Ok 'control panel closed' } else { Write-Warn2 "still running: $(($left2 | ForEach-Object { $_.Id }) -join ', ')" }
+}
+
 function Uninstall-All {
-    Write-Step 'stopping the control panel'
-    Get-Process -Name 'AmtPtpControlPanel' -ErrorAction SilentlyContinue |
-        Stop-Process -Force -ErrorAction SilentlyContinue
+    Stop-ControlPanel
     Remove-Autostart
+    Remove-Shortcuts
 
     Write-Step 'removing driver packages'
     $ids = (& pnputil.exe /enum-drivers) | Select-String -Pattern 'oem\d+\.inf' |
@@ -422,7 +449,7 @@ function Uninstall-All {
         }
     }
 
-    Write-Step 'removing certificates'
+    Write-Step 'removing this project''s certificates (if any were trusted)'
     foreach ($file in (Get-ChildItem -Path $certDir -Filter '*.cer' -File -ErrorAction SilentlyContinue)) {
         $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($file.FullName)
         foreach ($storeName in @('Root','CA','TrustedPublisher')) {
@@ -436,13 +463,15 @@ function Uninstall-All {
         Write-Ok "untrusted $($cert.Subject)"
     }
 
+    Write-Step 'removing the installed application'
     if (Test-Path $InstallDir) { Remove-Item $InstallDir -Recurse -Force; Write-Ok "removed $InstallDir" }
+    else { Write-Info "$InstallDir was not present" }
 }
 
 # ------------------------------- main -------------------------------
 
 Write-Host ''
-Write-Host 'Magic Trackpad for Windows - installer' -ForegroundColor White
+Write-Host 'Apple Magic Trackpad Setup Utility + Drivers v1.0' -ForegroundColor White
 Write-Host "  archive : $root"
 Write-Host ''
 

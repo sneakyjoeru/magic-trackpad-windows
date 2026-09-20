@@ -21,7 +21,8 @@ with the additions this repo needs in practice:
 
 ## Install
 
-1. Download `AmtPtpControlPanel-v1.0.8-win64.zip` from [Releases](../../releases/latest) and extract it.
+1. Download **Apple Magic Trackpad Setup Utility + Drivers v1.0** from
+   [Releases](../../releases/latest) and extract it.
 2. Double‑click **`Install.cmd`** and confirm the UAC prompt.
 
 That installs the certificates, the driver package, the control panel (to
