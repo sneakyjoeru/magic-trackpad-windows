@@ -57,8 +57,10 @@ Tray control panel (right‑click the tray icon):
   opening the tray menu. Bluetooth only — over USB‑C it shows a grey `?`.
 - **Startup** — *Start with Windows* / *Start minimized*, mirrored as the settings window's
   **Startup** group. Stored per user in `HKCU\Software\MtTrackpad\Tray`; one UAC prompt per logon.
-- Runs elevated, always, and only once (a single elevated process owns the tray icon; extra
-  launches exit silently).
+- Runs elevated, always, and only once (a single elevated process owns the tray icon). Starting
+  it again does **not** exit silently: the running instance is asked to bring its window up, so
+  double-clicking the shortcut always shows the settings (and an old instance is reported in a
+  message box instead).
 
 ## Devices
 

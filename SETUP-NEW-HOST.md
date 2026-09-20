@@ -212,6 +212,23 @@ installer prints: the driver INF covers `USB\VID_05AC&PID_0324`,
 `USB\VID_27A7&PID_2501/9601` and the Bluetooth HID form of `PID_0324`; any
 other Apple trackpad PID needs to be added to the INF and re-signed.
 
+## "Starting the panel does nothing"
+
+The panel is single-instance and lives in the notification area. If the installer already started
+it, a second launch used to exit silently. Since v1.0.11 a second launch **brings the running
+instance's window up** (and tells you in a message box if the instance is an older build that
+cannot listen). If no window and no tray icon appear at all, run
+
+```powershell
+.\Diagnose.cmd
+```
+
+and send `MagicTrackpad-diagnose.txt`: it lists the process, every window of it (visible or not),
+the per-user settings and autostart entry, the installed panel copies, the driver packages, the
+trackpad devices, the control-device probe result, third-party trackpad tools, and the startup
+error log (`%LOCALAPPDATA%\MagicTrackpad\panel-error.log`, written by v1.0.11+ if the panel ever
+fails to start).
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |

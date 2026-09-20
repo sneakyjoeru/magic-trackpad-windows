@@ -38,6 +38,9 @@ namespace AmtPtpControlPanel
         private System.Windows.Forms.ToolTip tipOptions;
         private Icon iconBase16;
         private Icon iconNa;
+        // second launches signal this event so the running instance
+        // brings its window up instead of exiting silently
+        private System.Threading.EventWaitHandle showEvent;
         // one icon per percentage value actually reported: the tray icon
         // carries the literal number so the level is visible even where
         // Windows 11 hides the text next to tray icons
@@ -307,6 +310,7 @@ namespace AmtPtpControlPanel
                 trayTimer.Start();
 
                 RefreshTray();
+                StartShowListener();
 
                 // right after launch the device sometimes does not answer
                 // yet (driver start-up, UAC relay hand-over), so a single
@@ -350,6 +354,11 @@ namespace AmtPtpControlPanel
                     trayIcon.Dispose();
                     trayIcon = null;
                 }
+                if (showEvent != null)
+                {
+                    showEvent.Close();
+                    showEvent = null;
+                }
                 if (tipOptions != null)
                 {
                     tipOptions.Dispose();
@@ -369,6 +378,50 @@ namespace AmtPtpControlPanel
                 WindowState = FormWindowState.Normal;
                 ShowInTaskbar = true;
                 Activate();
+            }
+            catch
+            {
+            }
+        }
+
+        // A second launch (double-clicking the shortcut again, or clicking a
+        // pinned icon) sets the show event; this thread marshals that onto the
+        // UI thread and restores the window. Without it the second process just
+        // exits and the user sees "nothing happen".
+        private void StartShowListener()
+        {
+            try
+            {
+                showEvent = new System.Threading.EventWaitHandle(false,
+                    System.Threading.EventResetMode.AutoReset,
+                    TrayLaunch.SHOW_EVENT_NAME);
+                System.Threading.Thread t = new System.Threading.Thread(delegate()
+                {
+                    while (true)
+                    {
+                        try
+                        {
+                            if (!showEvent.WaitOne(2000))
+                                continue;
+                            try
+                            {
+                                this.BeginInvoke((MethodInvoker)delegate()
+                                {
+                                    RestoreFromTray();
+                                });
+                            }
+                            catch
+                            {
+                            }
+                        }
+                        catch
+                        {
+                        }
+                    }
+                });
+                t.IsBackground = true;
+                t.Name = "mt-show-listener";
+                t.Start();
             }
             catch
             {

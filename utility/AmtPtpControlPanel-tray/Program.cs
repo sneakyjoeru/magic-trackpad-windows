@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
@@ -17,7 +18,52 @@ namespace AmtPtpControlPanel
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new Main(args));
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException +=
+                (s, e) => ReportCrash(e.Exception);
+            AppDomain.CurrentDomain.UnhandledException +=
+                (s, e) => ReportCrash(e.ExceptionObject as Exception);
+
+            try
+            {
+                Application.Run(new Main(args));
+            }
+            catch (Exception ex)
+            {
+                ReportCrash(ex);
+            }
+        }
+
+        // A failure before/while the window is created used to look like
+        // "nothing happens at all" - log it and say so on screen instead.
+        private static void ReportCrash(Exception ex)
+        {
+            string log = null;
+            try
+            {
+                string dir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "MagicTrackpad");
+                Directory.CreateDirectory(dir);
+                log = Path.Combine(dir, "panel-error.log");
+                File.AppendAllText(log, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                    + "  " + (ex == null ? "unknown error" : ex.ToString()) + "\r\n\r\n");
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                MessageBox.Show(
+                    "The Magic Trackpad control panel could not start:\n\n"
+                    + (ex == null ? "unknown error" : ex.Message)
+                    + (log == null ? "" : "\n\nDetails: " + log),
+                    "Magic Trackpad", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            catch
+            {
+            }
         }
     }
 
@@ -33,6 +79,9 @@ namespace AmtPtpControlPanel
     {
         private const string MUTEX_NAME = "Local\\AmtPtpControlPanel.SingleInstance";
         private const string EVENT_NAME = "Local\\AmtPtpControlPanel.ElevatedStarted";
+        // the running instance listens on this; a second launch sets it to ask
+        // for the settings window instead of exiting silently
+        public const string SHOW_EVENT_NAME = "Local\\AmtPtpControlPanel.ShowRequest";
         private const uint TOKEN_QUERY = 0x0002;
         private const int TOKEN_ELEVATION_CLASS = 2;
         private const int HANDOVER_TIMEOUT_MS = 90000;
@@ -116,6 +165,29 @@ namespace AmtPtpControlPanel
             return false;
         }
 
+        // Waits briefly for the running instance's show-event to appear (an
+        // instance that is still starting up may not have created it yet) and
+        // signals it.
+        private static bool RequestShowWindow()
+        {
+            for (int i = 0; i < 20; i++)
+            {
+                try
+                {
+                    using (EventWaitHandle ev = EventWaitHandle.OpenExisting(SHOW_EVENT_NAME))
+                    {
+                        ev.Set();
+                        return true;
+                    }
+                }
+                catch
+                {
+                    Thread.Sleep(200);
+                }
+            }
+            return false;
+        }
+
         private static string BuildRelayArguments(string[] args)
         {
             List<string> parts = new List<string>();
@@ -155,7 +227,29 @@ namespace AmtPtpControlPanel
             Thread.MemoryBarrier();
 
             if (!createdNew)
-                return false; // another (elevated) instance owns the tray
+            {
+                // an instance is already running (tray only, window possibly
+                // hidden): ask it to show its window. If it does not listen
+                // (old build, or it is still starting up) say so instead of
+                // exiting without any feedback.
+                if (!RequestShowWindow())
+                {
+                    try
+                    {
+                        MessageBox.Show(
+                            "The Magic Trackpad control panel is already running.\n\n"
+                            + "It lives in the notification area - look behind the clock\n"
+                            + "(click the ^ arrow next to the clock), then double-click its icon.\n\n"
+                            + "If you cannot find it, end AmtPtpControlPanel.exe in Task Manager\n"
+                            + "and start the panel again.",
+                            "Magic Trackpad", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    catch
+                    {
+                    }
+                }
+                return false;
+            }
 
             // we just created it (signaled state) - take it; cannot block
             mutex.WaitOne();

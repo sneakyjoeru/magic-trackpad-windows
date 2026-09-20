@@ -49,6 +49,9 @@ WHAT IS IN THE ARCHIVE
                                instance (use this when the panel reports
                                "Failed to open device. Error: 2")
   Uninstall-All-Apple-Drivers.ps1   the same, with -DryRun to only list things
+  Diagnose.cmd / Diagnose.ps1   writes MagicTrackpad-diagnose.txt (everything
+                               about the panel, driver and devices) - run this
+                               when something does not work and send the file
   install.ps1                  one-shot installer / uninstaller (the actual steps)
   AmtPtpControlPanel.exe       tray control panel (elevated, single instance)
   README.txt                   what the control panel does, option by option
@@ -109,6 +112,26 @@ Device present but "not started" / nothing reacts to the trackpad
       Unplug and replug the USB-C cable, then re-run with -DriverOnly.
       Check Device Manager: "Human Interface Devices" should show the
       Magic Trackpad entries with no warning triangle.
+
+Starting the panel seems to do nothing / no window appears
+      Most likely it is ALREADY running - the installer starts it, and it lives
+      in the notification area. Look behind the clock (click the ^ arrow next
+      to the clock) and double-click the trackpad icon.
+
+      In this version a second launch is no longer silent: it asks the running
+      instance to show its window, so double-clicking the shortcut (or running
+      the exe again, elevated or not) brings the settings window back. If an
+      OLDER build is the one running, the launcher says so in a message box -
+      end AmtPtpControlPanel.exe in Task Manager, then start the panel again.
+
+      "Start hidden in system tray" (Startup group) makes the automatic login
+      start tray-only by design; the window then comes back with a relaunch or
+      a double-click on the tray icon.
+
+      If there is really no window and no tray icon, run Diagnose.cmd and send
+      MagicTrackpad-diagnose.txt - it reports the process, its windows (visible
+      or not), the settings, the driver state and any startup error
+      (%LOCALAPPDATA%\MagicTrackpad\panel-error.log).
 
 The panel says "Failed to open device. Error: 2"
       Error 2 = the driver's control device (\\.\AmtPtpControlDeviceUm) does not
