@@ -48,6 +48,7 @@ typedef struct _DEVICE_CONTEXT
 	ULONG                       ForceClickPressure;
 	HANDLE                      ForceClickEvent;
 	ULONG                       LastForceClickTick;
+	BOOL                        ForceClickArmed;
 
 } DEVICE_CONTEXT, *PDEVICE_CONTEXT;
 

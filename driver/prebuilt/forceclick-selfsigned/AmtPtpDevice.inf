@@ -19,8 +19,9 @@ PtpUmDrivers_Dir = 13
 1 = %DiskName%,,,""
 
 [SourceDisksFiles]
-AmtPtpDeviceUsbUm.dll = 1,,
+AmtPtpDevice.inf      = 1,,
 AmtPtpHidFilter.sys   = 1,,
+AmtPtpDeviceUsbUm.dll = 1,,
 
 [Manufacturer]
 %ManufacturerName%=Standard,NTamd64
@@ -183,3 +184,8 @@ AmtPtpHidFilter.DeviceDesc = "Apple Multi-touch Trackpad HID Filter"
 AmtPtpHidFilter.NullDeviceDesc = "Apple Multi-touch Auxiliary Services"
 AmtPtpHidFilter.SVCDESC = "Apple Multi-touch Trackpad HID Filter Service"
 WudfRdDisplayName = "Windows Driver Foundation - User-mode Driver Framework Reflector"
+
+[CatalogFile]
+File1 = AmtPtpDevice.inf
+File2 = AmtPtpHidFilter.sys
+File3 = AmtPtpDeviceUsbUm.dll

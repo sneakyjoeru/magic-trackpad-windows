@@ -490,6 +490,12 @@ AmtPtpServiceTouchInputInterruptType5(
 		DeviceContext->IgnoreNearFingers = ReadSettingValue(L"IgnoreNearFingers", 1) ? TRUE : FALSE;
 		DeviceContext->PalmRejection = ReadSettingValue(L"PalmRejection", 0) ? TRUE : FALSE;
 		DeviceContext->ForceClickPressure = ReadSettingValue(L"ForceClickPressure", 0);
+		// create the signalling event once, here - never inside the input path
+		if (DeviceContext->ForceClickEvent == NULL)
+		{
+			DeviceContext->ForceClickEvent = CreateEventW(NULL, FALSE, FALSE,
+				L"Global\\MagicTrackpad.ForceClick");
+		}
 	}
 
 	if (DeviceContext->ButtonDisabled)
@@ -629,24 +635,30 @@ AmtPtpServiceTouchInputInterruptType5(
 
 	// ---- force click ---------------------------------------------------
 	// Signal the control panel through a named event when the user presses
-	// noticeably harder than a normal touch. The panel performs the action
-	// configured in its Force click group (right click by default) with
-	// SendInput. Event driven: nothing polls, nothing keeps the trackpad or
-	// its radio awake.
+	// noticeably harder than a normal touch. Strictly edge triggered: one
+	// signal per press (the pressure has to fall well below the threshold
+	// again before the next one), so a held press can never repeat actions or
+	// interfere with dragging. Event driven - nothing polls, nothing keeps the
+	// trackpad or its radio awake.
 	if (DeviceContext->ForceClickPressure > 0 &&
-		forceClickMax >= DeviceContext->ForceClickPressure)
+		DeviceContext->ForceClickEvent != NULL)
 	{
-		ULONG now = GetTickCount();
-		if (DeviceContext->ForceClickEvent == NULL)
+		if (!DeviceContext->ForceClickArmed)
 		{
-			DeviceContext->ForceClickEvent = CreateEventW(NULL, FALSE, FALSE,
-				L"Global\\MagicTrackpad.ForceClick");
+			// re-arm only after a clear release
+			if (forceClickMax < (DeviceContext->ForceClickPressure > 40
+					? DeviceContext->ForceClickPressure - 40 : 1))
+				DeviceContext->ForceClickArmed = TRUE;
 		}
-		if (DeviceContext->ForceClickEvent != NULL &&
-			(now - DeviceContext->LastForceClickTick) > 300)
+		else if (forceClickMax >= DeviceContext->ForceClickPressure)
 		{
-			DeviceContext->LastForceClickTick = now;
-			SetEvent(DeviceContext->ForceClickEvent);
+			ULONG now = GetTickCount();
+			if ((now - DeviceContext->LastForceClickTick) > 500)
+			{
+				DeviceContext->LastForceClickTick = now;
+				DeviceContext->ForceClickArmed = FALSE;   // one action per press
+				SetEvent(DeviceContext->ForceClickEvent);
+			}
 		}
 	}
 

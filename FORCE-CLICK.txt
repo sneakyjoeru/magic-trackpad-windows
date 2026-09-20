@@ -1,0 +1,99 @@
+Force click - optional self-signed driver variant
+=================================================
+
+This archive is the normal "Apple Magic Trackpad Setup Utility + Drivers v1.0"
+package plus a driver that can turn a FIRM PRESS on the trackpad into a second
+click. The Microsoft-signed driver cannot do this: the pressure value only
+exists inside the driver, and a modified driver cannot carry Microsoft's
+signature. So this variant is SELF-SIGNED and needs Windows test signing.
+
+WHAT YOU GET
+  * "Force click" group at the bottom of the settings window:
+      [ ] Simulate force click (press harder for a second click)
+      Action on force press:  [ Right mouse button (default) v ]
+      Pressure threshold (1-255): [ 150 ]
+
+  * Actions available:
+      Right mouse button (default)   - the classic "two finger click"
+      Middle mouse button
+      Double left click
+      Mouse back (X1)                - browser back
+      Mouse forward (X2)             - browser forward
+      Ctrl + Left click              - e.g. toggle selection
+      Enter / Return
+      Do nothing                     - keep the setting, perform nothing
+
+  * Robustness (v1.0.1 of this variant): the driver signals strictly on the
+    rising edge of a force press (one action per press; it re-arms only after
+    the pressure falls well below the threshold) and the event is created once
+    at device start, never inside the input path - so a click can no longer
+    stall the pointer or repeat actions while you hold the button. The panel
+    also refuses to inject button-1 based actions (double left click,
+    Ctrl + Left click) while the trackpad button is physically held, because
+    that would end a drag.
+
+  * Pressure threshold: how hard you must press before the action fires
+    (raw value 1-255; the default is 200 - raise it if a normal click triggers the action, lower it if you have to press too hard). The
+    driver signals the panel through a named event, which performs the action
+    with SendInput - event driven, so nothing polls and nothing keeps the
+    trackpad or its radio awake.
+
+SIGNING OPTIONS (least invasive first)
+  This is the part that decides whether you have to touch Windows at all:
+
+  A. SECURE BOOT OFF + our certificate trusted  ->  NO test signing needed.
+     Microsoft's kernel-mode signing policy exempts machines where Secure
+     Boot is off: there a driver signed by any certificate that chains to a
+     root in the machine's Trusted Root store is accepted. Our installer
+     already imports certs\MtRootCA.cer there, so:
+         - disable Secure Boot in the UEFI/BIOS setup,
+         - Install.cmd -SelfSigned   (without any bcdedit change),
+         - keep verification on: nothing else on the machine is weakened.
+     Source: https://learn.microsoft.com/windows-hardware/drivers/install/kernel-mode-code-signing-policy--windows-vista-and-later-
+
+  B. ATTESTATION SIGNING (Microsoft signs it) -> works with Secure Boot ON.
+     Register for the Windows Hardware Dev Center program (an EV code-signing
+     certificate is required to create the account), then submit the driver for
+     *attestation signing* - no HLK testing needed for Windows 10/11 client.
+     Microsoft returns a signed package that loads with Secure Boot enabled.
+     This is the only route that removes the requirement completely, and the
+     only one you can hand to other people.
+     Costs: EV certificate (typically ~200-400 USD/year, hardware token) plus
+     the Partner Center account. Azure Trusted Signing can serve as the
+     identity for attestation submissions.
+     Sources: https://learn.microsoft.com/windows-hardware/drivers/dashboard/code-signing-attestation
+              https://learn.microsoft.com/windows-hardware/drivers/dashboard/hardware-program-register
+
+  C. TEST SIGNING (what this package does today) -> free, but weakens the
+     machine: "bcdedit /set testsigning on" + reboot, Secure Boot must be off,
+     and Windows shows a Test Mode watermark.
+
+INSTALL
+  1. Windows test signing must be ON **unless** you use option A above
+     (Secure Boot off + trusted certificate). We cannot sign this driver with a
+     Microsoft certificate ourselves:
+         bcdedit /set testsigning on
+     then REBOOT. Secure Boot has to be off for that. Windows will show
+     "Test Mode" on the desktop.
+
+  2. In this folder, run (double-click Install.cmd and pass the switch, or use
+     a command prompt):
+         Install.cmd -SelfSigned
+     It trusts certs\MtRootCA.cer, imports the self-signed driver from
+     driver-self-signed\ and starts the panel. The normal Microsoft-signed
+     package in driver\ stays untouched, so you can switch back at any time.
+
+  3. Open the panel, tick "Simulate force click", pick the action and tune the
+     threshold. Applying also nudges the driver to re-read its settings.
+
+GOING BACK TO THE SIGNED DRIVER (no test signing, no force click)
+         Uninstall-All-Apple-Drivers.cmd
+         Install.cmd
+  and then, if you like, turn test signing off again:
+         bcdedit /set testsigning off      (reboot afterwards)
+
+NOTE
+  The force-click variant is based on our patched INF (VID 05AC and the
+  VID 27A7 clones, Windows 10 section) - the same one the earlier self-signed
+  package used. Everything else in this archive is identical to the normal
+  package; see README.txt and INSTALL.txt, and the full credits there.

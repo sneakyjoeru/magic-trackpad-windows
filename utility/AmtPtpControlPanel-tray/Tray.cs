@@ -27,14 +27,17 @@ namespace AmtPtpControlPanel
         private System.DateTime lastUiRefresh = System.DateTime.MinValue;
         private System.Windows.Forms.Timer earlyUiTimer;
         private int earlyUiTicks;
-        // polling cadence: fast while the user is looking at the app, slow
-        // (10 min) while it just sits in the tray unfocused - opening the
-        // tray menu or focusing the window refreshes immediately anyway
-        private const int TrayActiveIntervalMs = 5000;
-        private const int TrayIdleIntervalMs = 600000;
+        // Battery polling is strictly on demand: the timer only runs while the
+        // settings window is actually being looked at (focused/restored). When
+        // the app sits in the tray there is NO polling at all - that way the
+        // app can never keep the trackpad or its radio busy and drain anything.
+        // Opening the tray menu or the window reads immediately instead.
+        private const int BatteryPollIntervalMs = 5000;
         private bool hiddenOnStartup = false;
         private bool trayExitRequested = false;
         private int trayCloseCount = 0;
+        private bool hidingToTray = false;
+        private bool trayHideBalloonShown = false;
         private System.Windows.Forms.ToolTip tipOptions;
         private Icon iconBase16;
         private Icon iconNa;
@@ -49,6 +52,7 @@ namespace AmtPtpControlPanel
         private void TrayWire(string[] args)
         {
             WireControlTooltips();
+            BuildForceClickUi();
 
             try
             {
@@ -64,23 +68,36 @@ namespace AmtPtpControlPanel
                         hiddenOnStartup = true;
 
             this.Load += (s, e) => InitTray();
+
+            // Minimizing must not leave a taskbar card behind: fold the window
+            // away into the tray icon instead.
+            this.Resize += (s, e) =>
+            {
+                if (WindowState == FormWindowState.Minimized)
+                    HideToTray(true);
+            };
+
             this.FormClosing += (s, e) =>
             {
                 try
                 {
                     if (trayIcon == null || trayExitRequested)
                         return;
+
+                    // "Start hidden in system tray" means this is a tray app:
+                    // the X button only hides it, quitting is the icon menu's job
+                    if (SettingStartMin)
+                    {
+                        HideToTray(true);
+                        e.Cancel = true;
+                        return;
+                    }
+
                     trayCloseCount += 1;
                     if (trayCloseCount == 1)
                     {
                         // first close: park in the tray instead of quitting
-                        WindowState = FormWindowState.Minimized;
-                        ShowInTaskbar = false;
-                        Visible = false;
-                        trayIcon.BalloonTipTitle = "Magic Trackpad";
-                        trayIcon.BalloonTipText = "Window hidden - the app now lives in the tray icon (right-click it). Press the window close button a second time or use 'Exit' in the icon menu to really quit.";
-                        trayIcon.ShowBalloonTip(5000);
-                        SetTrayInterval(TrayIdleIntervalMs);
+                        HideToTray(true);
                         e.Cancel = true;
                     }
                 }
@@ -94,9 +111,9 @@ namespace AmtPtpControlPanel
             // this can never race with the 5 s background refresh
             this.Activated += (s, e) =>
             {
-                // the user is looking at the app again: back to the fast
-                // cadence and one immediate, fresh reading
-                SetTrayInterval(TrayActiveIntervalMs);
+                // the user is looking at the app: poll while that lasts and
+                // read once right away
+                StartBatteryPolling();
                 if ((System.DateTime.Now - lastUiRefresh)
                         .TotalMilliseconds > 1000)
                 {
@@ -104,9 +121,9 @@ namespace AmtPtpControlPanel
                     RefreshTray();
                 }
             };
-            // unfocused: the percentage is not being watched, so drop to one
-            // read every 10 minutes instead of every 5 seconds
-            this.Deactivate += (s, e) => SetTrayInterval(TrayIdleIntervalMs);
+            // not being watched any more: stop polling completely (no battery
+            // reads, no driver traffic, no power draw while it sits in the tray)
+            this.Deactivate += (s, e) => StopBatteryPolling();
         }
 
         protected override void OnShown(EventArgs e)
@@ -304,10 +321,10 @@ namespace AmtPtpControlPanel
                 trayIcon.Visible = true;
 
                 trayTimer = new System.Windows.Forms.Timer();
-                trayTimer.Interval = hiddenOnStartup
-                        ? TrayIdleIntervalMs : TrayActiveIntervalMs;
+                trayTimer.Interval = BatteryPollIntervalMs;
                 trayTimer.Tick += (s, e) => RefreshTray();
-                trayTimer.Start();
+                if (!hiddenOnStartup)
+                    trayTimer.Start();   // only while the window is watched
 
                 RefreshTray();
                 StartShowListener();
@@ -378,6 +395,11 @@ namespace AmtPtpControlPanel
                 WindowState = FormWindowState.Normal;
                 ShowInTaskbar = true;
                 Activate();
+                // the window is about to be looked at: read once and poll while
+                // it stays in the foreground
+                lastUiRefresh = System.DateTime.MinValue;
+                RefreshTray();
+                StartBatteryPolling();
             }
             catch
             {
@@ -428,14 +450,57 @@ namespace AmtPtpControlPanel
             }
         }
 
-        private void SetTrayInterval(int ms)
+        // Hides the window in the tray: no taskbar card, no polling, only the
+        // notification-area icon remains. Used by the minimize button, by the
+        // close button and when the app starts hidden.
+        private void HideToTray(bool showBalloon)
         {
             try
             {
-                if (trayTimer == null)
+                if (hidingToTray)
                     return;
-                if (trayTimer.Interval != ms)
-                    trayTimer.Interval = ms;
+                hidingToTray = true;
+                WindowState = FormWindowState.Minimized;
+                ShowInTaskbar = false;
+                Visible = false;
+                StopBatteryPolling();
+                if (showBalloon && trayIcon != null && !trayHideBalloonShown)
+                {
+                    trayHideBalloonShown = true;
+                    trayIcon.BalloonTipTitle = "Magic Trackpad";
+                    trayIcon.BalloonTipText = SettingStartMin
+                        ? "The window is hidden - this app lives in the tray icon (right-click it). Use 'Exit' there to quit."
+                        : "The window is hidden - the app keeps running in the tray icon (right-click it). Use 'Exit' there to quit, or start the app again to bring the window back.";
+                    trayIcon.ShowBalloonTip(5000);
+                }
+            }
+            catch
+            {
+            }
+            finally
+            {
+                hidingToTray = false;
+            }
+        }
+
+        private void StartBatteryPolling()
+        {
+            try
+            {
+                if (trayTimer != null && !trayTimer.Enabled)
+                    trayTimer.Start();
+            }
+            catch
+            {
+            }
+        }
+
+        private void StopBatteryPolling()
+        {
+            try
+            {
+                if (trayTimer != null && trayTimer.Enabled)
+                    trayTimer.Stop();
             }
             catch
             {
@@ -764,6 +829,424 @@ namespace AmtPtpControlPanel
             }
             catch
             {
+            }
+        }
+    }
+
+    // ==================================================================
+    // Force click: a firm press on the trackpad can act as a second click.
+    // The (optional) force-click driver build watches the contact pressure and
+    // signals a named event; this panel performs the configured action with
+    // SendInput. Everything is event driven - nothing polls.
+    // ==================================================================
+    public partial class Main
+    {
+        private const string ForceClickEventName = "Global\\MagicTrackpad.ForceClick";
+        private const string DriverParamsPath =
+            @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\WUDF\Services\AmtPtpDeviceUsbUm\Parameters";
+
+        private CheckBox ctlForceClick;
+        private ComboBox ctlForceAction;
+        private TextBox ctlForcePressure;
+        private System.Threading.EventWaitHandle forceClickEvent;
+        private int forceClickAction = 0;
+        private int forceClickPressure = 0;
+
+        private static readonly string[] ForceClickActions = new string[]
+        {
+            "Right mouse button (default)",
+            "Middle mouse button",
+            "Double left click",
+            "Mouse back (X1)",
+            "Mouse forward (X2)",
+            "Ctrl + Left click",
+            "Enter / Return",
+            "Do nothing"
+        };
+
+        private void BuildForceClickUi()
+        {
+            try
+            {
+                // Borrow the Startup group's real (runtime-scaled) geometry:
+                // the designer controls are DPI/font scaled, so hard-coded
+                // pixel sizes would not match this form at all.
+                int gw = (ctlStartupGroupBox != null) ? ctlStartupGroupBox.Width : 600;
+                int gx = (ctlStartupGroupBox != null) ? ctlStartupGroupBox.Left : 13;
+                int gy = (ctlStartupGroupBox != null)
+                        ? ctlStartupGroupBox.Bottom + 8 : 800;
+
+                GroupBox g = new GroupBox();
+                g.Text = "Force click  (needs the force-click driver build)";
+                g.Size = new System.Drawing.Size(gw, 96);
+                g.Location = new System.Drawing.Point(gx, gy);
+                g.TabIndex = 18;
+
+                int inner = gw - 32;
+
+                ctlForceClick = new CheckBox();
+                ctlForceClick.AutoSize = false;
+                ctlForceClick.Location = new System.Drawing.Point(16, 20);
+                ctlForceClick.Size = new System.Drawing.Size(inner, 22);
+                ctlForceClick.Text = "Simulate force click (press harder for a second click)";
+                g.Controls.Add(ctlForceClick);
+
+                Label lblAction = new Label();
+                lblAction.AutoSize = false;
+                lblAction.Location = new System.Drawing.Point(16, 52);
+                lblAction.Size = new System.Drawing.Size(140, 20);
+                lblAction.Text = "Action on force press:";
+                g.Controls.Add(lblAction);
+
+                ctlForceAction = new ComboBox();
+                ctlForceAction.DropDownStyle = ComboBoxStyle.DropDownList;
+                ctlForceAction.Location = new System.Drawing.Point(158, 49);
+                ctlForceAction.Size = new System.Drawing.Size(200, 21);
+                ctlForceAction.Items.AddRange(ForceClickActions);
+                g.Controls.Add(ctlForceAction);
+
+                Label lblPressure = new Label();
+                lblPressure.AutoSize = false;
+                lblPressure.Location = new System.Drawing.Point(gw - 330, 52);
+                lblPressure.Size = new System.Drawing.Size(190, 20);
+                lblPressure.Text = "Pressure threshold (1-255):";
+                g.Controls.Add(lblPressure);
+
+                ctlForcePressure = new TextBox();
+                ctlForcePressure.Location = new System.Drawing.Point(gw - 132, 49);
+                ctlForcePressure.Size = new System.Drawing.Size(54, 21);
+                ctlForcePressure.TextAlign = HorizontalAlignment.Center;
+                g.Controls.Add(ctlForcePressure);
+
+                this.Controls.Add(g);
+
+                // make room for the group
+                int needed = g.Bottom + 14;
+                if (this.ClientSize.Height < needed)
+                    this.ClientSize = new System.Drawing.Size(this.ClientSize.Width, needed);
+
+                // load what the driver currently has
+                forceClickPressure = ReadDriverInt("ForceClickPressure", 0);
+                forceClickAction = ReadDriverInt("ForceClickAction", 0);
+                if (forceClickAction < 0 || forceClickAction >= ForceClickActions.Length)
+                    forceClickAction = 0;
+                ctlForceAction.SelectedIndex = forceClickAction;
+                ctlForcePressure.Text = (forceClickPressure > 0 ? forceClickPressure : 200).ToString();
+                ctlForceClick.Checked = forceClickPressure > 0;
+
+                ctlForceClick.CheckedChanged += (s, e) =>
+                {
+                    ApplyForceClickSettings();
+                };
+                ctlForceAction.SelectedIndexChanged += (s, e) =>
+                {
+                    ApplyForceClickSettings();
+                };
+                ctlForcePressure.TextChanged += (s, e) =>
+                {
+                    ApplyForceClickSettings();
+                };
+
+                if (tipOptions != null)
+                {
+                    tipOptions.SetToolTip(g,
+                        "Force click uses the pressure sensor of the trackpad: pressing noticeably " +
+                        "harder than a normal touch performs the action selected here. It needs the " +
+                        "force-click driver build (the Microsoft-signed driver has no pressure " +
+                        "interface and simply ignores these settings).");
+                    tipOptions.SetToolTip(ctlForceClick,
+                        "Off: a firm press does nothing special. On: the driver reports the force " +
+                        "press and this panel performs the action below. The pressure threshold " +
+                        "decides how hard you have to press - start at the default and raise it if " +
+                        "normal clicks trigger it, lower it if you have to press too hard.");
+                    tipOptions.SetToolTip(ctlForceAction,
+                        "What a force press does: right mouse button (default, same as a two-finger " +
+                        "click), middle mouse button, a double left click, browser back / forward, " +
+                        "Ctrl + left click or Enter. 'Do nothing' keeps the driver setting but " +
+                        "performs no action.");
+                    tipOptions.SetToolTip(ctlForcePressure,
+                        "Raw pressure value (1-255) at which the action fires. Around 120-180 is a " +
+                        "firm press on most units. Lower = easier to trigger.");
+                }
+
+                StartForceClickListener();
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    string dir = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "MagicTrackpad");
+                    Directory.CreateDirectory(dir);
+                    File.AppendAllText(Path.Combine(dir, "forceclick-ui.log"),
+                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + ex + "\r\n\r\n");
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        private static int ReadDriverInt(string name, int def)
+        {
+            try
+            {
+                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(DriverParamsPath))
+                {
+                    if (k != null)
+                    {
+                        object v = k.GetValue(name);
+                        if (v is int)
+                            return (int)v;
+                    }
+                }
+            }
+            catch
+            {
+            }
+            return def;
+        }
+
+        private void WriteDriverInt(string name, int value)
+        {
+            try
+            {
+                using (RegistryKey k = Registry.LocalMachine.CreateSubKey(DriverParamsPath))
+                {
+                    if (k != null)
+                        k.SetValue(name, value, RegistryValueKind.DWord);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private void ApplyForceClickSettings()
+        {
+            try
+            {
+                int threshold = 0;
+                if (ctlForceClick != null && ctlForceClick.Checked)
+                {
+                    int parsed;
+                    if (int.TryParse(ctlForcePressure.Text, out parsed))
+                    {
+                        if (parsed < 1) parsed = 1;
+                        if (parsed > 255) parsed = 255;
+                        threshold = parsed;
+                    }
+                    else
+                    {
+                        threshold = 200;
+                    }
+                }
+
+                int action = 0;
+                if (ctlForceAction != null && ctlForceAction.SelectedIndex >= 0)
+                    action = ctlForceAction.SelectedIndex;
+
+                int previousPressure = forceClickPressure;
+                forceClickPressure = threshold;
+                forceClickAction = action;
+
+                // only touch the registry when something really changed
+                if (previousPressure != threshold)
+                    WriteDriverInt("ForceClickPressure", threshold);
+                WriteDriverInt("ForceClickAction", action);
+
+                // the driver picks the threshold up without a reload - it reads it
+                // once per device start, so ask it to re-read the settings
+                if (previousPressure != threshold)
+                    NudgeDriverReload();
+            }
+            catch
+            {
+            }
+        }
+
+        private void NudgeDriverReload()
+        {
+            try
+            {
+                uint dummy;
+                BtDevice.SendIoctl(BtDevice.IOCTL_RELOAD_SETTINGS, out dummy, false);
+            }
+            catch
+            {
+            }
+        }
+
+        private void StartForceClickListener()
+        {
+            try
+            {
+                // create the event ourselves so it always exists; the driver's
+                // CreateEventW then finds (and signals) this very object
+                forceClickEvent = new System.Threading.EventWaitHandle(false,
+                    System.Threading.EventResetMode.AutoReset, ForceClickEventName);
+
+                System.Threading.Thread t = new System.Threading.Thread(delegate()
+                {
+                    while (true)
+                    {
+                        try
+                        {
+                            if (!forceClickEvent.WaitOne(1000))
+                                continue;
+                            int action = forceClickAction;
+                            if (forceClickPressure <= 0 || action < 0 || action > 6)
+                                continue;
+
+                            // "Double left click" and "Ctrl + Left click" press
+                            // button 1 themselves; while the user is holding the
+                            // trackpad button (dragging) that would cancel the
+                            // drag, so they are skipped in that moment.
+                            bool touchesLeftButton = (action == 2 || action == 5);
+                            if (touchesLeftButton && ForceClickAction.LeftButtonDown())
+                                continue;
+
+                            ForceClickAction.Perform(action);
+                        }
+                        catch
+                        {
+                        }
+                    }
+                });
+                t.IsBackground = true;
+                t.Name = "mt-forceclick";
+                t.Start();
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    // Performs the configured "second click" with SendInput.
+    public static class ForceClickAction
+    {
+        private const uint INPUT_MOUSE = 0;
+        private const uint INPUT_KEYBOARD = 1;
+
+        private const uint LEFTDOWN = 0x0002, LEFTUP = 0x0004;
+        private const uint RIGHTDOWN = 0x0008, RIGHTUP = 0x0010;
+        private const uint MIDDLEDOWN = 0x0020, MIDDLEUP = 0x0040;
+        private const uint XDOWN = 0x0080, XUP = 0x0100;
+        private const uint KEYUP = 0x0002;
+        private const ushort VK_RETURN = 0x0D, VK_CONTROL = 0x11;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MOUSEINPUT
+        {
+            public int dx, dy;
+            public uint mouseData, dwFlags, time;
+            public IntPtr dwExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct KEYBDINPUT
+        {
+            public ushort wVk, wScan;
+            public uint dwFlags, time;
+            public IntPtr dwExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        private struct InputUnion
+        {
+            [FieldOffset(0)] public MOUSEINPUT mi;
+            [FieldOffset(0)] public KEYBDINPUT ki;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct INPUT
+        {
+            public uint type;
+            public InputUnion u;
+        }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+        [DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int vKey);
+
+        // VK_LBUTTON: true while the physical button is held
+        public static bool LeftButtonDown()
+        {
+            try
+            {
+                return (GetAsyncKeyState(0x01) & 0x8000) != 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static INPUT Mouse(uint flags, uint data)
+        {
+            INPUT i = new INPUT();
+            i.type = INPUT_MOUSE;
+            i.u.mi.dwFlags = flags;
+            i.u.mi.mouseData = data;
+            return i;
+        }
+
+        private static INPUT Key(ushort vk, bool up)
+        {
+            INPUT i = new INPUT();
+            i.type = INPUT_KEYBOARD;
+            i.u.ki.wVk = vk;
+            i.u.ki.dwFlags = up ? KEYUP : 0;
+            return i;
+        }
+
+        private static void Send(INPUT[] inputs)
+        {
+            try
+            {
+                SendInput((uint)inputs.Length, inputs,
+                    Marshal.SizeOf(typeof(INPUT)));
+            }
+            catch
+            {
+            }
+        }
+
+        // 0 right, 1 middle, 2 double left, 3 back, 4 forward, 5 ctrl+left, 6 enter
+        public static void Perform(int action)
+        {
+            switch (action)
+            {
+                case 0:
+                    Send(new INPUT[] { Mouse(RIGHTDOWN, 0), Mouse(RIGHTUP, 0) });
+                    break;
+                case 1:
+                    Send(new INPUT[] { Mouse(MIDDLEDOWN, 0), Mouse(MIDDLEUP, 0) });
+                    break;
+                case 2:
+                    // two separate pairs - a single burst is often coalesced
+                    Send(new INPUT[] { Mouse(LEFTDOWN, 0), Mouse(LEFTUP, 0) });
+                    System.Threading.Thread.Sleep(40);
+                    Send(new INPUT[] { Mouse(LEFTDOWN, 0), Mouse(LEFTUP, 0) });
+                    break;
+                case 3:
+                    Send(new INPUT[] { Mouse(XDOWN, 1), Mouse(XUP, 1) });   // XBUTTON1
+                    break;
+                case 4:
+                    Send(new INPUT[] { Mouse(XDOWN, 2), Mouse(XUP, 2) });   // XBUTTON2
+                    break;
+                case 5:
+                    Send(new INPUT[] {
+                        Key(VK_CONTROL, false), Mouse(LEFTDOWN, 0),
+                        Mouse(LEFTUP, 0), Key(VK_CONTROL, true) });
+                    break;
+                case 6:
+                    Send(new INPUT[] { Key(VK_RETURN, false), Key(VK_RETURN, true) });
+                    break;
             }
         }
     }
