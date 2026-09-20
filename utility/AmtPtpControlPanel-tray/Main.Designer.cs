@@ -354,6 +354,7 @@ namespace AmtPtpControlPanel
             this.ctlShowBatteryInTray.AutoSize = true;
             this.ctlShowBatteryInTray.Location = new System.Drawing.Point(16, 64);
             this.ctlShowBatteryInTray.Name = "ctlShowBatteryInTray";
+            this.ctlShowBatteryInTray.Size = new System.Drawing.Size(195, 24);
             this.ctlShowBatteryInTray.TabIndex = 16;
             this.ctlShowBatteryInTray.Text = "Show battery percentage in tray";
             this.ctlShowBatteryInTray.UseVisualStyleBackColor = true;
@@ -375,6 +376,7 @@ namespace AmtPtpControlPanel
             this.ctlStartAuto.AutoSize = true;
             this.ctlStartAuto.Location = new System.Drawing.Point(16, 24);
             this.ctlStartAuto.Name = "ctlStartAuto";
+            this.ctlStartAuto.Size = new System.Drawing.Size(310, 24);
             this.ctlStartAuto.TabIndex = 0;
             this.ctlStartAuto.Text = "Start automatically at login (one UAC prompt per login)";
             this.ctlStartAuto.UseVisualStyleBackColor = true;
@@ -384,6 +386,7 @@ namespace AmtPtpControlPanel
             this.ctlStartHidden.AutoSize = true;
             this.ctlStartHidden.Location = new System.Drawing.Point(16, 52);
             this.ctlStartHidden.Name = "ctlStartHidden";
+            this.ctlStartHidden.Size = new System.Drawing.Size(286, 24);
             this.ctlStartHidden.TabIndex = 1;
             this.ctlStartHidden.Text = "Start hidden in system tray (with the option above)";
             this.ctlStartHidden.UseVisualStyleBackColor = true;
