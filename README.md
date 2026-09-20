@@ -79,16 +79,21 @@ Tray control panel (right‑click the tray icon):
 magic-trackpad-windows/
 ├── install.ps1                  one-shot installer (what Install.cmd calls)
 ├── Install.cmd / Uninstall.cmd  double-click entry points (self-elevating)
+├── Fix-Trackpad-Error2.cmd      one-click repair (clean + signed driver + restart)
+├── Restore-Signature-Enforcement.cmd  turns Windows test signing back off
 ├── Uninstall-All-Apple-Drivers.cmd  clean slate: removes every Apple trackpad driver
+├── Diagnose.cmd                 writes a full diagnostic report
 ├── SETUP-NEW-HOST.md            full setup guide for a fresh machine
 ├── INSTALL.txt                  quick start, manual steps, troubleshooting
-├── certs/                       MtRootCA.cer + MtPtpSigner.cer (driver trust)
+├── certs/                       MtRootCA.cer + MtPtpSigner.cer (only for self-signed builds)
 ├── driver/                      patched MagicTrackpad2ForWindows source
 │   ├── AmtPtpDeviceUsbUm/       user-mode WUDF driver (C)
 │   ├── AmtPtpHidFilter/         kernel HID filter (C)
 │   ├── AmtPtpControlPanel/      upstream WinForms panel (C#)
 │   ├── build/                   INFs + make.bat / make_win10.bat
-│   └── prebuilt/win10-x64/      built + signed Windows 10 x64 package
+│   └── prebuilt/
+│       ├── ms-signed-amd64/     the shipped package (Microsoft-signed, no test signing)
+│       └── win10-x64/           optional self-signed variant (VID 27A7 clones)
 └── utility/
     ├── MtTrackpad.ps1           setup / control utility (headless)
     ├── Verify-MtTrackpad.ps1    unattended PASS/FAIL check
