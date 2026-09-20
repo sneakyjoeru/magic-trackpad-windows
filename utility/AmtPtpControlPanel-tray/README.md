@@ -15,9 +15,11 @@ WinForms control panel (`driver/AmtPtpControlPanel`) and extended with:
   - the icon's Text/label is the short value (`100%`) — that is what Windows displays
     next to the icon on systems that show tray labels (Windows 10 has no such option at
     all, Windows 11 hides labels by default);
-  - the value refreshes every **5 s**, immediately **at launch** (forced reads at
-    1/2/3 s, because the driver can ignore the very first IOCTL) and whenever the
-    settings window is **opened or re‑focused**.
+  - the value refreshes **every 5 s while the settings window is focused**, immediately
+    **at launch** (forced reads at 1/2/3 s, because the driver can ignore the very first
+    IOCTL), whenever the window is **opened or re‑focused**, and whenever the **tray
+    menu is opened**; while the app just sits unfocused in the tray the cadence drops to
+    **one read every 10 minutes**.
   - **Bluetooth only** — over USB‑C the trackpad is powered by the cable and reports no
     level.
 - **Explanatory tooltips** on every option control (click feedback, gesture stopping,
