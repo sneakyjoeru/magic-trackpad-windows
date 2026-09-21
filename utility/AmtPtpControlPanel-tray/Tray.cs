@@ -376,6 +376,11 @@ namespace AmtPtpControlPanel
                     showEvent.Close();
                     showEvent = null;
                 }
+                if (forceClickEvent != null)
+                {
+                    forceClickEvent.Close();
+                    forceClickEvent = null;
+                }
                 if (tipOptions != null)
                 {
                     tipOptions.Dispose();

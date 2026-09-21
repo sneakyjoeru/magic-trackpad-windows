@@ -283,22 +283,25 @@ namespace AmtPtpControlPanel
                     {
                     }
 
-                    if (child != null)
+                    // NEVER wait for the child to exit: the elevated copy lives for
+                    // the whole session, and a relay process that lingers keeps the
+                    // executable file open - that is what made the exe impossible to
+                    // delete and broke uninstall. Wait for the hand-over event
+                    // instead: the elevated copy signals it as soon as it owns the
+                    // mutex, then this process exits immediately.
+                    if (child == null)
                     {
-                        try { child.WaitForExit(HANDOVER_TIMEOUT_MS); } catch { }
+                        // Process.Start threw - UAC was refused or the launch failed
+                        if (AskRetry())
+                            continue;
+                        return false;
                     }
 
                     if (ev.WaitOne(HANDOVER_TIMEOUT_MS))
                         return false; // elevated copy is up - relay done
 
-                    DialogResult r = MessageBox.Show(
-                        "The Magic Trackpad control panel requires administrator rights\n" +
-                        "(its settings and the driver's battery interface are admin-only).\n\n" +
-                        "Do you want to try again?",
-                        "Magic Trackpad - elevation required",
-                        MessageBoxButtons.RetryCancel,
-                        MessageBoxIcon.Warning);
-                    if (r == DialogResult.Retry)
+                    // no hand-over at all: the copy died before taking over
+                    if (AskRetry())
                         continue;
                     return false;
                 }
@@ -307,6 +310,18 @@ namespace AmtPtpControlPanel
             {
                 ev.Dispose();
             }
+        }
+
+        private static bool AskRetry()
+        {
+            DialogResult r = MessageBox.Show(
+                        "The Magic Trackpad control panel requires administrator rights\n" +
+                        "(its settings and the driver's battery interface are admin-only).\n\n" +
+                "Do you want to try again?",
+                "Magic Trackpad - elevation required",
+                MessageBoxButtons.RetryCancel,
+                MessageBoxIcon.Warning);
+            return r == DialogResult.Retry;
         }
     }
 }

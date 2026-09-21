@@ -444,18 +444,39 @@ function Remove-Shortcuts {
 }
 
 function Stop-ControlPanel {
+    # Both the launcher stub and the elevated panel run from the same exe, and a
+    # process that is still alive keeps the file locked - so kill every instance
+    # and wait until they are really gone before anything tries to delete files.
     $procs = @(Get-Process -Name 'AmtPtpControlPanel' -ErrorAction SilentlyContinue)
     if ($procs.Count -eq 0) { Write-Info 'control panel is not running'; return }
     Write-Step "closing the control panel ($($procs.Count) process(es))"
     foreach ($p in $procs) {
         try { $p.CloseMainWindow() | Out-Null } catch { }
     }
-    Start-Sleep -Seconds 1
-    $left = @(Get-Process -Name 'AmtPtpControlPanel' -ErrorAction SilentlyContinue)
-    foreach ($p in $left) { try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch { } }
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Milliseconds 800
+    for ($i = 1; $i -le 20; $i++) {
+        $left = @(Get-Process -Name 'AmtPtpControlPanel' -ErrorAction SilentlyContinue)
+        if ($left.Count -eq 0) { break }
+        foreach ($p in $left) { try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch { } }
+        Start-Sleep -Milliseconds 400
+    }
     $left2 = @(Get-Process -Name 'AmtPtpControlPanel' -ErrorAction SilentlyContinue)
-    if ($left2.Count -eq 0) { Write-Ok 'control panel closed' } else { Write-Warn2 "still running: $(($left2 | ForEach-Object { $_.Id }) -join ', ')" }
+    if ($left2.Count -eq 0) { Write-Ok 'control panel closed' }
+    else { Write-Warn2 "still running: $(($left2 | ForEach-Object { $_.Id }) -join ', ') - close it manually if files stay locked" }
+}
+
+function Remove-PathWithRetry {
+    param([string]$Path, [int]$Tries = 20)
+    if (-not (Test-Path $Path)) { return $true }
+    for ($i = 1; $i -le $Tries; $i++) {
+        try {
+            Remove-Item $Path -Recurse -Force -ErrorAction Stop
+            return $true
+        } catch {
+            Start-Sleep -Milliseconds 500
+        }
+    }
+    return $false
 }
 
 function Uninstall-All {
@@ -493,8 +514,13 @@ function Uninstall-All {
     }
 
     Write-Step 'removing the installed application'
-    if (Test-Path $InstallDir) { Remove-Item $InstallDir -Recurse -Force; Write-Ok "removed $InstallDir" }
-    else { Write-Info "$InstallDir was not present" }
+    if (-not (Test-Path $InstallDir)) {
+        Write-Info "$InstallDir was not present"
+    } elseif (Remove-PathWithRetry -Path $InstallDir) {
+        Write-Ok "removed $InstallDir"
+    } else {
+        Write-Warn2 "$InstallDir is still locked - close the control panel (Task Manager: AmtPtpControlPanel.exe) and delete the folder by hand"
+    }
 }
 
 # ------------------------------- main -------------------------------
