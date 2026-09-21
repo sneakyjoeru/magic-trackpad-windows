@@ -113,6 +113,7 @@ namespace AmtPtpControlPanel
             {
                 // the user is looking at the app: poll while that lasts and
                 // read once right away
+                RefreshForceClickStatus();
                 StartBatteryPolling();
                 if ((System.DateTime.Now - lastUiRefresh)
                         .TotalMilliseconds > 1000)
@@ -851,6 +852,7 @@ namespace AmtPtpControlPanel
             @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\WUDF\Services\AmtPtpDeviceUsbUm\Parameters";
 
         private CheckBox ctlForceClick;
+        private Label ctlForceStatus;
         private ComboBox ctlForceAction;
         private TextBox ctlForcePressure;
         private System.Threading.EventWaitHandle forceClickEvent;
@@ -883,7 +885,7 @@ namespace AmtPtpControlPanel
 
                 GroupBox g = new GroupBox();
                 g.Text = "Force click  (needs the force-click driver build)";
-                g.Size = new System.Drawing.Size(gw, 96);
+                g.Size = new System.Drawing.Size(gw, 118);
                 g.Location = new System.Drawing.Point(gx, gy);
                 g.TabIndex = 18;
 
@@ -922,6 +924,15 @@ namespace AmtPtpControlPanel
                 ctlForcePressure.Size = new System.Drawing.Size(54, 21);
                 ctlForcePressure.TextAlign = HorizontalAlignment.Center;
                 g.Controls.Add(ctlForcePressure);
+
+                // Which firmware/signing state is this machine in? It decides
+                // whether the self-signed force-click driver can load at all.
+                ctlForceStatus = new Label();
+                ctlForceStatus.AutoSize = false;
+                ctlForceStatus.Location = new System.Drawing.Point(16, 74);
+                ctlForceStatus.Size = new System.Drawing.Size(inner, 36);
+                ctlForceStatus.Text = ForceClickStatusText();
+                g.Controls.Add(ctlForceStatus);
 
                 this.Controls.Add(g);
 
@@ -991,6 +1002,78 @@ namespace AmtPtpControlPanel
                 {
                 }
             }
+        }
+
+        [DllImport("kernel32.dll")]
+        private static extern bool GetFirmwareType(out uint firmwareType);
+
+        private void RefreshForceClickStatus()
+        {
+            try
+            {
+                if (ctlForceStatus != null && !ctlForceStatus.IsDisposed)
+                    ctlForceStatus.Text = ForceClickStatusText();
+            }
+            catch
+            {
+            }
+        }
+
+        // "Secure Boot: OFF | test signing: OFF" plus the reason it matters.
+        private static string ForceClickStatusText()
+        {
+            string secureBoot;
+            try
+            {
+                uint fw;
+                bool uefi = GetFirmwareType(out fw) && fw == 2;   // 2 = UEFI
+                if (!uefi)
+                {
+                    secureBoot = "not applicable (legacy BIOS)";
+                }
+                else
+                {
+                    object v = null;
+                    using (RegistryKey k = Registry.LocalMachine.OpenSubKey(
+                            @"SYSTEM\CurrentControlSet\Control\SecureBoot\State"))
+                    {
+                        if (k != null)
+                            v = k.GetValue("UEFISecureBootEnabled");
+                    }
+                    secureBoot = (v is int) ? (((int)v) != 0 ? "ON" : "OFF") : "unknown";
+                }
+            }
+            catch
+            {
+                secureBoot = "unknown";
+            }
+
+            string testSigning = "off";
+            try
+            {
+                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(
+                        @"SYSTEM\CurrentControlSet\Control"))
+                {
+                    if (k != null)
+                    {
+                        object v = k.GetValue("SystemStartOptions");
+                        if (v is string &&
+                            ((string)v).IndexOf("TESTSIGNING", StringComparison.OrdinalIgnoreCase) >= 0)
+                            testSigning = "ON";
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            bool blocked = (secureBoot == "ON") && (testSigning != "ON");
+
+            return "Secure Boot: " + secureBoot + "     test signing: " + testSigning +
+                (blocked ? "     -> cannot load the force-click driver as configured" : "") +
+                "\r\nThe force-click driver is self-signed: it loads only with Secure Boot OFF " +
+                "(our certificate is trusted in that case) or with test signing ON. With Secure Boot " +
+                "on, use the Microsoft-signed driver - force click stays unavailable.";
         }
 
         private static int ReadDriverInt(string name, int def)

@@ -196,6 +196,28 @@ function Install-Driver {
         Write-Ok ("installed package kind: " + ($installedKinds -join ', '))
     }
 
+    # The upstream driver defaults IgnoreButtonFinger to 1, which locks the
+    # pointer to the press point while the button is held ("clicking stops the
+    # tracking"). This build defaults it to 0, but pin it explicitly when the
+    # user has no preference yet, so the behaviour can never regress.
+    if ($SelfSigned) {
+        try {
+            $params = 'HKLM:\SYSTEM\CurrentControlSet\Control\WUDF\Services\AmtPtpDeviceUsbUm\Parameters'
+            $alt = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\WUDF\Services\AmtPtpDeviceUsbUm\Parameters'
+            foreach ($key in @($params, $alt)) {
+                if (Test-Path $key) {
+                    $current = (Get-ItemProperty -Path $key -Name 'IgnoreButtonFinger' -ErrorAction SilentlyContinue)
+                    if (-not $current) {
+                        New-ItemProperty -Path $key -Name 'IgnoreButtonFinger' -Value 0 -PropertyType DWord -Force | Out-Null
+                        Write-Ok "driver default: IgnoreButtonFinger=0 (drag with the button finger)"
+                    }
+                }
+            }
+        } catch {
+            Write-Warn2 "could not pin the IgnoreButtonFinger default: $($_.Exception.Message)"
+        }
+    }
+
     Write-Step 're-scanning devices'
     & pnputil.exe /scan-devices | Out-Null
     Start-Sleep -Seconds 4
