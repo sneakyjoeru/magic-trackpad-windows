@@ -181,10 +181,15 @@ function Install-Driver {
             }
         }
     } elseif ($have) {
-        Write-Step "self-signed package already installed ($($existing -join ', ')) - re-binding instead of importing a copy"
+        Write-Step "a self-signed package is already installed ($($existing -join ', ')) - importing this archive's copy so a newer build replaces it"
     }
 
-    if (-not $have) {
+    # Self-signed archives are re-imported even when a self-signed package is
+    # already present: the driver store keeps whichever DriverVer is higher, so an
+    # upgrade (for example a rotation-capable build over an older one) only lands
+    # because of this. pnputil ignores a byte-identical package.
+    $refreshSelfSigned = ($want -eq 'self-signed' -and $have)
+    if (-not $have -or $refreshSelfSigned) {
         Write-Step "importing driver package ($inf)"
         $out = & pnputil.exe /add-driver "$inf" /install 2>&1
         $out | ForEach-Object { Write-Host "    $_" }

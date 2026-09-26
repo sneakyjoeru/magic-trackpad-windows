@@ -151,19 +151,29 @@ is powered by the cable and reports nothing, so the tray icon shows a grey `?`.
 1. Right-click the tray icon → **Open**.
 2. Click feedback / silent clicking / gesture stopping / palm rejection / finger filtering —
    every option has a tooltip; **Apply** hot-reloads the driver, no reboot.
-3. **Startup** group: `Start automatically at login (one UAC prompt per login)` and
+3. **Startup** group: `Start automatically at login (elevated logon task, no UAC prompt)` and
    `Start hidden in system tray`. Both mirror the tray menu items *Start with Windows* /
    *Start minimized* and live in `HKCU\Software\MtTrackpad\Tray`.
-4. Battery: `Show battery percentage in tray` shows the charge in the tray icon (and in the
+4. **Rotation** (tray menu) — rotates the trackpad input in 90° steps: 0°, 90°, 180°, −90°.
+   The setting is written to the driver and the trackpad restarts once so the driver re-reads
+   its HID report descriptor. Needs a driver built with rotation support (see *Rotation* below).
+5. Battery: `Show battery percentage in tray` shows the charge in the tray icon (and in the
    menu item, and in the icon's label on systems that display tray labels).
 
 ### Autostart and UAC
 
-The panel needs an elevated token (it opens the driver's control device). Its Run entry
-(`HKCU\...\CurrentVersion\Run` → `Magic Trackpad`) therefore triggers one UAC prompt per
-logon; refusing it leaves the panel closed. For a prompt-free start, create a scheduled task
-once that runs the exe with highest privileges at logon — the panel does not care how it was
-started.
+The panel needs an elevated token (it opens the driver's control device). *Start with Windows*
+therefore registers a **logon scheduled task** for the current user with **RunLevel Highest**:
+
+```
+schtasks /Create /TN MagicTrackpad /TR "\"<install dir>\AmtPtpControlPanel.exe\" -minimized" \
+         /SC ONLOGON /RL HIGHEST /F
+```
+
+Task Scheduler starts the exe already elevated, so there is **no UAC consent prompt at logon**.
+That matters on an unattended machine: a prompt nobody clicks auto-denies after ~2 minutes and
+the tray icon never appeared. (Older installs used `HKCU\...\CurrentVersion\Run`; the panel
+migrates that entry to the task automatically the first time it starts.)
 
 ---
 

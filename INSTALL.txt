@@ -1,4 +1,4 @@
-Apple Magic Trackpad Setup Utility + Drivers v1.0
+﻿Apple Magic Trackpad Setup Utility + Drivers v1.0
 =================================================
 
 This archive contains EVERYTHING needed on a fresh Windows host: the
@@ -34,7 +34,7 @@ QUICK START (new host, 3 steps)
 
 Useful switches:
 
-       -Autostart            also register "start with Windows" (one UAC per logon)
+       -Autostart            also register "start with Windows" (elevated logon task, no UAC prompt)
        -StartMinimized       with -Autostart: start straight into the tray
        -DriverOnly           install only the driver + certificates
        -SkipLaunch           install everything but do not start the panel

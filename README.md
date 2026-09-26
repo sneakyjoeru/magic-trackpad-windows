@@ -52,6 +52,7 @@ with Windows.
 | Force / haptic click feedback | ✅ | ✅ |
 | Battery level | ➖ powered by the cable | ✅ |
 | Pointer / gesture options | ✅ | ✅ |
+| Trackpad rotation (90° / 180° / 270°) | ✅ self-signed driver | ➖ |
 
 Tray control panel (right‑click the tray icon):
 
@@ -68,8 +69,15 @@ Tray control panel (right‑click the tray icon):
   see `FORCE-CLICK.txt` in the "(force click, self-signed)" archive. The driver signals a named
   event and the panel performs the action with `SendInput` (event driven, no polling); with the
   Microsoft-signed driver the option stays inert.
+- **Rotation** (tray menu) — rotate the trackpad input in 90° steps: 0°, 90°, 180°, −90°. The
+  setting goes to the driver and the trackpad restarts once so the driver re-reads its HID report
+  descriptor. Needs a **driver built with rotation support** — the Microsoft-signed driver
+  predates it (same situation as force click), so use the self-signed archive for this.
 - **Startup** — *Start with Windows* / *Start minimized*, mirrored as the settings window's
-  **Startup** group. Stored per user in `HKCU\Software\MtTrackpad\Tray`; one UAC prompt per logon.
+  **Startup** group. Stored per user in `HKCU\Software\MtTrackpad\Tray`. The autostart entry is an
+  **elevated logon scheduled task** (`schtasks /SC ONLOGON /RL HIGHEST`), so there is **no UAC
+  prompt at logon** — an unattended machine still gets its tray icon instead of a prompt that
+  times out and auto-denies.
 - Runs elevated, always, and only once (a single elevated process owns the tray icon). Starting
   it again does **not** exit silently: the running instance is asked to bring its window up, so
   double-clicking the shortcut always shows the settings (and an old instance is reported in a

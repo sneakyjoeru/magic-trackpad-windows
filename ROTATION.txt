@@ -1,0 +1,53 @@
+Rotation - optional self-signed driver variant
+==============================================
+
+This archive is the normal "Apple Magic Trackpad Setup Utility + Drivers v1.1"
+package plus a driver built from source that can rotate the trackpad input.
+Rotation happens inside the driver (it remaps every contact and swaps the X/Y
+axes of the Magic Trackpad 2 HID report descriptor for 90/270), so a driver
+that carries it can no longer hold Microsoft's signature. Like force click,
+this variant is SELF-SIGNED and needs Windows test signing.
+
+WHAT YOU GET
+  * Tray icon - right-click -> "Rotation":
+        0 degrees (default)
+        90 degrees
+        180 degrees
+        -90 degrees
+
+    The value is written to the driver's "Rotation" parameter and the trackpad
+    restarts once, because the host re-reads the HID report descriptor only when
+    the device restarts.
+
+  * Headless:
+        utility\MtTrackpad.ps1 rotate -Degrees 90
+        utility\MtTrackpad.ps1 rotate -Degrees -90        (stored as 270)
+        utility\MtTrackpad.ps1 rotate                     (show the current value)
+
+  * Registry value (both driver parameter keys):
+        HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\WUDF\Services\
+             AmtPtpDeviceUsbUm\Parameters\Rotation   = 0 | 90 | 180 | 270
+        HKLM\SYSTEM\CurrentControlSet\Services\
+             AmtPtpHidFilter\Parameters\Rotation      = 0 | 90 | 180 | 270
+
+INSTALL
+
+    bcdedit /set testsigning on          (Secure Boot must be OFF, then reboot)
+    Install.cmd -SelfSigned
+
+  The installer trusts the certificate shipped in certs\, imports the package
+  and binds the device. Back to the Microsoft-signed driver:
+
+    Uninstall-All-Apple-Drivers.cmd -IncludeCerts
+    Install.cmd
+    bcdedit /set testsigning off         (then reboot)
+
+NOTES
+  * 90 and -90 are the same mapping in opposite directions. The direction was
+    not confirmed on hardware - if the pad turns the wrong way, pick the other
+    entry.
+  * Rotation is implemented in the USB (UMDF) driver. The Bluetooth path is
+    handled by the native HID stack with AmtPtpHidFilter as a passthrough
+    filter, so the setting has no effect there yet.
+  * This archive also contains the force-click driver variant (see
+    FORCE-CLICK.txt) - both features live in the same build.

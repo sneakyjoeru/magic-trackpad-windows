@@ -42,6 +42,11 @@ typedef struct _DEVICE_CONTEXT
 	BOOL                        IgnoreNearFingers;
 	BOOL                        PalmRejection;
 
+	// Trackpad rotation in degrees: 0, 90, 180 or 270. Read from the driver
+	// parameters ("Rotation"). 90/270 additionally swap the X/Y axes of the
+	// Magic Trackpad 2 HID report descriptor.
+	ULONG                       Rotation;
+
 	// Force click: when the highest contact pressure reaches this value the
 	// driver signals the named event below; the control panel then performs the
 	// configured action (0 = feature off). Pressure is a UCHAR (0-255).

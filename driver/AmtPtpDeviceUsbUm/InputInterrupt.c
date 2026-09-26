@@ -405,6 +405,42 @@ exit:
 
 }
 
+// Remaps one touch contact for the configured trackpad rotation. X/Y arrive in
+// the device's own coordinate space (already offset so min == 0) and are written
+// back in the space the driver's report descriptor declares:
+//   90/270 keep the raw spans [0, spanX) x [0, spanY) but swap the axes, which is
+//   why AmtPtpGetReportDescriptor swaps the descriptor's X/Y maxima for those
+//   angles. 180 only mirrors both axes.
+static VOID
+AmtPtpRotateContact(
+	_In_ PDEVICE_CONTEXT DeviceContext,
+	_Inout_ INT* X,
+	_Inout_ INT* Y
+)
+{
+	INT spanX = DeviceContext->DeviceInfo->x.max - DeviceContext->DeviceInfo->x.min;
+	INT spanY = DeviceContext->DeviceInfo->y.max - DeviceContext->DeviceInfo->y.min;
+	INT x = *X;
+	INT y = *Y;
+
+	switch (DeviceContext->Rotation) {
+		case 90:
+			*X = y;
+			*Y = spanX - 1 - x;
+			break;
+		case 180:
+			*X = spanX - 1 - x;
+			*Y = spanY - 1 - y;
+			break;
+		case 270:
+			*X = spanY - 1 - y;
+			*Y = x;
+			break;
+		default:
+			break;
+	}
+}
+
 _IRQL_requires_(PASSIVE_LEVEL)
 NTSTATUS
 AmtPtpServiceTouchInputInterruptType5(
@@ -496,6 +532,10 @@ AmtPtpServiceTouchInputInterruptType5(
 			DeviceContext->ForceClickEvent = CreateEventW(NULL, FALSE, FALSE,
 				L"Global\\MagicTrackpad.ForceClick");
 		}
+		// Rotation is also read by AmtPtpGetReportDescriptor (the HID report
+		// descriptor has to be swapped for 90/270 before the host asks for it),
+		// so both reads must agree.
+		DeviceContext->Rotation = ReadSettingValue(L"Rotation", 0);
 	}
 
 	if (DeviceContext->ButtonDisabled)
@@ -527,6 +567,11 @@ AmtPtpServiceTouchInputInterruptType5(
 
 			x = (x - DeviceContext->DeviceInfo->x.min) > 0 ? (x - DeviceContext->DeviceInfo->x.min) : 0;
 			y = (y - DeviceContext->DeviceInfo->y.min) > 0 ? (y - DeviceContext->DeviceInfo->y.min) : 0;
+
+			// Apply the configured trackpad rotation before anything else uses
+			// x/y (contact slot bookkeeping included, so the locked button
+			// position is stored rotated as well).
+			AmtPtpRotateContact(DeviceContext, &x, &y);
 
 			PtpReport.Contacts[i].ContactID = f->Id;
 			// 0x1 = Transition between states

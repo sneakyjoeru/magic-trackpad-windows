@@ -24,10 +24,14 @@ WinForms control panel (`driver/AmtPtpControlPanel`) and extended with:
     level.
 - **Explanatory tooltips** on every option control (click feedback, gesture stopping,
   palm rejection, finger filtering, battery, startup).
-- **Startup group** in the settings window — *Start automatically at login (one UAC
-  prompt per login)* and *Start hidden in system tray* — mirroring the tray menu items
+- **Startup group** in the settings window — *Start automatically at login (elevated logon
+  task, no UAC prompt)* and *Start hidden in system tray* — mirroring the tray menu items
   *Start with Windows* / *Start minimized*. Stored per user in
-  `HKCU\Software\MtTrackpad\Tray`; the Run entry is `Magic Trackpad`.
+  `HKCU\Software\MtTrackpad\Tray`; the entry itself is the logon task `MagicTrackpad`
+  (`schtasks /SC ONLOGON /RL HIGHEST`), so the app starts elevated with **no UAC prompt**.
+- **Rotation** (tray menu) — 0°, 90°, 180°, −90°. Writes the driver's `Rotation` value and
+  restarts the trackpad once so the driver re-reads its report descriptor. Needs a driver
+  built with rotation support; with the Microsoft-signed driver the menu is inert.
 
 Settings persist to the same vendor registry location the original panel uses
 (`HKLM\...\WUDF\Services\AmtPtpDeviceUsbUm\Parameters`), so both panels control the
@@ -62,7 +66,9 @@ signature. With the Microsoft-signed driver the group is inert.
      stopping, palm rejection, focus hack, battery, …).
    - **Battery: NN %** — current charge (Bluetooth mode only).
    - **Show battery percentage in tray - NN %** — toggle; the number is the icon.
-   - **Start with Windows** — per‑user Run entry; one UAC prompt per logon.
+   - **Start with Windows** — registers the elevated logon task `MagicTrackpad`; the app
+     starts at logon with **no UAC prompt**.
+   - **Rotation** — submenu: 0°, 90°, 180°, −90°.
    - **Start minimized** — begin in the tray without opening the window.
    - **Exit** — stop the app.
 3. Minimizing hides the window in the tray icon - no taskbar card is left behind. Closing

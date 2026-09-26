@@ -1,4 +1,4 @@
-AmtPtpControlPanel - tray control panel for the Magic Trackpad (v1.0.7)
+﻿AmtPtpControlPanel - tray control panel for the Magic Trackpad (v1.0.7)
 =========================================================================
 
 WHAT THIS IS
@@ -26,11 +26,12 @@ WHAT THIS IS
   * Explanatory tooltips on every option in the settings window.
 
   * "Startup" group in the settings window:
-      "Start automatically at login (one UAC prompt per login)"
+      "Start automatically at login (elevated logon task, no UAC prompt)"
       "Start hidden in system tray"
     both mirror the tray-menu items "Start with Windows" / "Start minimized".
-    Stored per user in HKCU\Software\MtTrackpad\Tray; the autostart entry is
-    HKCU\...\CurrentVersion\Run "Magic Trackpad".
+    Stored per user in HKCU\Software\MtTrackpad\Tray; the autostart entry is the
+    logon task "MagicTrackpad" (schtasks /SC ONLOGON /RL HIGHEST), so the app starts
+    elevated with no UAC prompt.
 
 REQUIREMENTS
   * Windows 10/11 x64
@@ -59,7 +60,8 @@ USE
                          size, palm rejection, finger filtering, battery).
     Battery: NN %      - current charge (Bluetooth only).
     Show battery percentage in tray - toggle, shows the live value.
-    Start with Windows - run at every logon (one UAC prompt per logon).
+    Start with Windows - elevated logon task, no UAC prompt at logon.
+    Rotation           - submenu: 0 / 90 / 180 / -90 degrees (driver support needed).
     Start minimized    - start in the tray without opening the window.
     Exit               - stop the app.
 

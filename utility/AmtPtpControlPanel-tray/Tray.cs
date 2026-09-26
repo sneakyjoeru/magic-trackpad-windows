@@ -10,7 +10,8 @@ namespace AmtPtpControlPanel
 {
     // Tray integration:
     //  - system tray icon, optional battery readout (driver IOCTL, overlapped I/O)
-    //  - "Start with Windows" toggle (HKCU Run key "Magic Trackpad")
+    //  - "Start with Windows" toggle (elevated logon scheduled task "MagicTrackpad",
+    //    so no UAC prompt appears at logon)
     //  - "Start minimized" toggle (autostart uses the -minimized argument;
     //    launching the app with -minimized hides it in the tray)
     public partial class Main : Form
@@ -22,6 +23,8 @@ namespace AmtPtpControlPanel
         private ToolStripMenuItem miShowBattery;
         private ToolStripMenuItem miAutoStart;
         private ToolStripMenuItem miStartMin;
+        private ToolStripMenuItem miRotation;
+        private System.Collections.Generic.Dictionary<int, ToolStripMenuItem> rotationItems;
         private System.Windows.Forms.Timer trayTimer;
         private int lastBatteryPercent = -1;
         private System.DateTime lastUiRefresh = System.DateTime.MinValue;
@@ -233,11 +236,10 @@ namespace AmtPtpControlPanel
                 miAutoStart = new ToolStripMenuItem("Start with Windows");
                 miAutoStart.Checked = SettingAutoStart;
                 miAutoStart.ToolTipText =
-                    "Adds 'Magic Trackpad' to the current user's startup. The app " +
-                    "requires admin rights, so at each login a UAC prompt appears - " +
-                    "accept it to keep the tray icon, or the app waits (with a dialog) " +
-                    "until you retry. Settings are per-user, the elevated copy uses " +
-                    "your usual user profile.";
+                    "Registers an elevated logon task for the current user - no UAC " +
+                    "prompt at login, so the tray icon always comes up even when " +
+                    "nobody is there to click a prompt. Settings are per-user; the " +
+                    "elevated copy uses your usual user profile.";
                 miAutoStart.Click += (s, e) =>
                 {
                     TraySetInt("AutoStart", miAutoStart.Checked ? 1 : 0);
@@ -259,6 +261,14 @@ namespace AmtPtpControlPanel
                     WriteAutoStart();
                 };
 
+                miRotation = new ToolStripMenuItem("Rotation");
+                miRotation.ToolTipText =
+                    "Rotates the trackpad input in 90 degree steps. The driver re-reads " +
+                    "the setting when the device restarts, so the trackpad blinks once. " +
+                    "Needs a driver built with rotation support - the Microsoft-signed " +
+                    "one predates it and ignores the option.";
+                BuildRotationMenu();
+
                 ToolStripMenuItem miOpen = new ToolStripMenuItem("Open");
                 miOpen.ToolTipText = "Brings up the main settings window.";
                 miOpen.Click += (s, e) => RestoreFromTray();
@@ -277,12 +287,17 @@ namespace AmtPtpControlPanel
                 ContextMenuStrip trayMenu = new ContextMenuStrip();
                 // the menu always shows a value read right now, which is why
                 // the background cadence can be slow while unfocused
-                trayMenu.Opening += (s, e) => RefreshTray();
+                trayMenu.Opening += (s, e) =>
+                {
+                    RefreshTray();
+                    RefreshRotationChecks();
+                };
                 trayMenu.Items.Add(miBatteryItem);
                 trayMenu.Items.Add(new ToolStripSeparator());
                 trayMenu.Items.Add(miShowBattery);
                 trayMenu.Items.Add(miAutoStart);
                 trayMenu.Items.Add(miStartMin);
+                trayMenu.Items.Add(miRotation);
                 trayMenu.Items.Add(new ToolStripSeparator());
                 trayMenu.Items.Add(miOpen);
                 trayMenu.Items.Add(miExit);
@@ -349,6 +364,9 @@ namespace AmtPtpControlPanel
                     }
                 };
                 earlyUiTimer.Start();
+
+                // one-time migration off the old HKCU Run entry
+                MigrateAutoStart();
             }
             catch
             {
@@ -705,28 +723,83 @@ namespace AmtPtpControlPanel
             return Icon.FromHandle(h);
         }
 
+        private const string AutoStartTaskName = "MagicTrackpad";
+
         private void WriteAutoStart()
         {
             try
             {
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true))
+                // Drop the legacy HKCU Run entry. It launched the app unelevated,
+                // so Windows asked for elevation at every logon - and a prompt
+                // nobody clicks times out (auto-deny), which left no tray icon at
+                // all on an unattended machine.
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Run", true))
                 {
-                    if (key == null)
-                        return;
-
-                    if (SettingAutoStart)
-                    {
-                        string path = "\"" + Application.ExecutablePath + "\"";
-                        if (SettingStartMin)
-                            path += " -minimized";
-                        key.SetValue("Magic Trackpad", path, RegistryValueKind.String);
-                    }
-                    else
-                    {
-                        if (key.GetValue("Magic Trackpad") != null)
-                            key.DeleteValue("Magic Trackpad", false);
-                    }
+                    if (key != null && key.GetValue("Magic Trackpad") != null)
+                        key.DeleteValue("Magic Trackpad", false);
                 }
+
+                if (SettingAutoStart)
+                {
+                    string command = "\"" + Application.ExecutablePath + "\"";
+                    if (SettingStartMin)
+                        command += " -minimized";
+
+                    // RunLevel Highest starts the app elevated straight away, so
+                    // there is no UAC consent prompt at logon.
+                    RunSchtasks("/Create /TN \"" + AutoStartTaskName + "\" /TR \"" +
+                        command.Replace("\"", "\\\"") +
+                        "\" /SC ONLOGON /RL HIGHEST /F");
+                }
+                else
+                {
+                    RunSchtasks("/Delete /TN \"" + AutoStartTaskName + "\" /F");
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private static void RunSchtasks(string arguments)
+        {
+            try
+            {
+                System.Diagnostics.ProcessStartInfo psi = new System.Diagnostics.ProcessStartInfo();
+                psi.FileName = "schtasks.exe";
+                psi.Arguments = arguments;
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                using (System.Diagnostics.Process p = System.Diagnostics.Process.Start(psi))
+                {
+                    if (p != null)
+                        p.WaitForExit(15000);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        // One-time migration: an install created before the logon task existed still
+        // carries the HKCU Run entry that raised the UAC prompt at every logon.
+        private void MigrateAutoStart()
+        {
+            try
+            {
+                if (!SettingAutoStart)
+                    return;
+
+                bool legacyRun = false;
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Run"))
+                {
+                    legacyRun = (key != null && key.GetValue("Magic Trackpad") != null);
+                }
+
+                if (legacyRun)
+                    WriteAutoStart();
             }
             catch
             {
@@ -816,10 +889,10 @@ namespace AmtPtpControlPanel
                     "Controls what happens at login: whether the app starts on its " +
                     "own and whether it should appear only as a tray icon.");
                 tipOptions.SetToolTip(ctlStartAuto,
-                    "Adds 'Magic Trackpad' to the current user's startup. The app " +
-                    "requires admin rights, so at each login a UAC prompt appears - " +
-                    "accept it to keep the tray icon, or the app waits (with a dialog) " +
-                    "until you retry. Same option is in the tray icon's right-click menu.");
+                    "Registers an elevated logon task for the current user (schtasks " +
+                    "/SC ONLOGON /RL HIGHEST). Windows starts the app already elevated, " +
+                    "so there is no UAC prompt at login and an unattended machine still " +
+                    "gets its tray icon. Same option is in the tray icon's right-click menu.");
                 tipOptions.SetToolTip(ctlStartHidden,
                     "Only relevant together with 'Start automatically at login': " +
                     "at login the app appears as a tray icon only - no window pops " +
@@ -1164,6 +1237,57 @@ namespace AmtPtpControlPanel
             catch
             {
             }
+        }
+
+        //=================
+        // Trackpad rotation (driver "Rotation" DWORD: 0 / 90 / 180 / 270)
+        //=================
+
+        private void BuildRotationMenu()
+        {
+            rotationItems = new System.Collections.Generic.Dictionary<int, ToolStripMenuItem>();
+            int[] degrees = new int[] { 0, 90, 180, 270 };
+            string[] labels = new string[] { "0 degrees (default)", "90 degrees", "180 degrees", "-90 degrees" };
+
+            for (int i = 0; i < degrees.Length; i++)
+            {
+                int value = degrees[i];
+                ToolStripMenuItem item = new ToolStripMenuItem(labels[i]);
+                item.Click += (s, e) => ApplyRotation(value);
+                rotationItems[value] = item;
+                miRotation.DropDownItems.Add(item);
+            }
+
+            RefreshRotationChecks();
+        }
+
+        private void RefreshRotationChecks()
+        {
+            if (rotationItems == null)
+                return;
+
+            int current = ReadDriverInt("Rotation", 0);
+            foreach (System.Collections.Generic.KeyValuePair<int, ToolStripMenuItem> pair in rotationItems)
+                pair.Value.Checked = (pair.Key == current);
+        }
+
+        private void ApplyRotation(int degrees)
+        {
+            try
+            {
+                WriteDriverInt("Rotation", degrees);
+
+                // 90/270 also swap the X/Y axes of the HID report descriptor, and
+                // the host only re-reads that when the device restarts - so a
+                // restart is part of every rotation change.
+                UsbDevice.RestartDevices();
+                NudgeDriverReload();
+            }
+            catch
+            {
+            }
+
+            RefreshRotationChecks();
         }
 
         private void StartForceClickListener()

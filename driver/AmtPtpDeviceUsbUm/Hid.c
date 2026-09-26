@@ -245,6 +245,78 @@ exit:
 	return status;
 }
 
+// Scratch copy of the Magic Trackpad 2 report descriptor used when the axes have
+// to be swapped for 90/270 degree rotation. It is rebuilt from the pristine
+// template on every descriptor request, so it cannot accumulate changes.
+static UCHAR g_Mt2RotatedReportDescriptor[sizeof(AmtPtpMt2ReportDescriptor)];
+
+// Swaps the X and Y axis declarations of the Magic Trackpad 2 report descriptor
+// (logical maxima 7612/5065 and physical maxima 1600/1149). With the axes swapped
+// the descriptor matches the coordinate mapping AmtPtpRotateContact applies for
+// 90/270 degree rotation, so the rotated surface keeps the pad's real physical
+// proportions instead of being stretched by the aspect ratio.
+//
+// The padded buffer is always a pristine copy of AmtPtpMt2ReportDescriptor, so
+// this is applied at most once per descriptor request. The byte pattern is the
+// exact X/Y block emitted by AAPL_MAGIC_TRACKPAD2_PTP_FINGER_COLLECTION_1/2 and
+// occurs once per finger collection (five in total).
+static VOID
+AmtPtpSwapXyAxesInReportDescriptor(
+	_Inout_updates_bytes_(Length) UCHAR* Descriptor,
+	_In_ size_t Length
+)
+{
+	static const UCHAR XyBlock[] = {
+		0x26, 0xBC, 0x1D,   // LOGICAL_MAXIMUM 7612 (X)
+		0x75, 0x10,         // REPORT_SIZE 16
+		0x55, 0x0E,         // UNIT_EXPONENT -2
+		0x65, 0x11,         // UNIT 0x11 (SI Length: cm)
+		0x09, 0x30,         // USAGE X
+		0x46, 0x40, 0x06,   // PHYSICAL_MAXIMUM 1600 (X)
+		0x95, 0x01,         // REPORT_COUNT 1
+		0x81, 0x02,         // INPUT (Data,Var,Abs)
+		0x46, 0x7D, 0x04,   // PHYSICAL_MAXIMUM 1149 (Y)
+		0x26, 0xC9, 0x13,   // LOGICAL_MAXIMUM 5065 (Y)
+		0x09, 0x31,         // USAGE Y
+		0x81, 0x02          // INPUT (Data,Var,Abs)
+	};
+	static const UCHAR XyBlockRotated[] = {
+		0x26, 0xC9, 0x13,   // LOGICAL_MAXIMUM 5065 (X)
+		0x75, 0x10,
+		0x55, 0x0E,
+		0x65, 0x11,
+		0x09, 0x30,
+		0x46, 0x7D, 0x04,   // PHYSICAL_MAXIMUM 1149 (X)
+		0x95, 0x01,
+		0x81, 0x02,
+		0x46, 0x40, 0x06,   // PHYSICAL_MAXIMUM 1600 (Y)
+		0x26, 0xBC, 0x1D,   // LOGICAL_MAXIMUM 7612 (Y)
+		0x09, 0x31,
+		0x81, 0x02
+	};
+	size_t i, j;
+	BOOLEAN match;
+
+	if (Length < sizeof(XyBlock)) {
+		return;
+	}
+
+	for (i = 0; i + sizeof(XyBlock) <= Length; i++) {
+		match = TRUE;
+		for (j = 0; j < sizeof(XyBlock); j++) {
+			if (Descriptor[i + j] != XyBlock[j]) {
+				match = FALSE;
+				break;
+			}
+		}
+
+		if (match) {
+			RtlCopyMemory(Descriptor + i, XyBlockRotated, sizeof(XyBlockRotated));
+			i += sizeof(XyBlock) - 1;
+		}
+	}
+}
+
 _IRQL_requires_(PASSIVE_LEVEL)
 NTSTATUS
 AmtPtpGetReportDescriptor(
@@ -258,6 +330,7 @@ AmtPtpGetReportDescriptor(
 	size_t			       szHidDescriptor = 0;
 	WDFMEMORY              RequestMemory;
 	PHID_REPORT_DESCRIPTOR pSelectedHidDescriptor = NULL;
+	ULONG                  rotation = 0;
 
 	TraceEvents(
 		TRACE_LEVEL_INFORMATION, 
@@ -340,6 +413,23 @@ AmtPtpGetReportDescriptor(
 		{
 			szHidDescriptor = AmtPtpMt2DefaultHidDescriptor.DescriptorList[0].wReportLength;
 			pSelectedHidDescriptor = AmtPtpMt2ReportDescriptor;
+
+			// The host caches the report descriptor, so a rotation change only
+			// takes effect after the device is restarted (MtTrackpad.ps1 rotate
+			// does that). 90/270 need the axes swapped; 0/180 need the raw one.
+			rotation = ReadSettingValue(L"Rotation", 0);
+			if (rotation == 90 || rotation == 270) {
+				RtlCopyMemory(
+					g_Mt2RotatedReportDescriptor,
+					AmtPtpMt2ReportDescriptor,
+					sizeof(AmtPtpMt2ReportDescriptor)
+				);
+				AmtPtpSwapXyAxesInReportDescriptor(
+					g_Mt2RotatedReportDescriptor,
+					sizeof(g_Mt2RotatedReportDescriptor)
+				);
+				pSelectedHidDescriptor = g_Mt2RotatedReportDescriptor;
+			}
 			break;
 		}
 	}

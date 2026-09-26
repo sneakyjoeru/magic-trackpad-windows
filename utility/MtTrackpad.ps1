@@ -20,6 +20,18 @@
     battery    Query battery level via IOCTL (meaningful when connected via Bluetooth)
     reload     Ask the driver to reload settings (IOCTL_RELOAD_SETTINGS) + restart the device
     wireless   List Bluetooth candidates / start pairing UI / report hardware IDs for INF extension
+    rotate     Rotate the trackpad (0 | 90 | 180 | -90 degrees) and reload the driver
+    tray       Stay resident in the notification area with a rotation quick-switch menu
+    autostart  Install / remove / report the logon task that starts "tray" elevated (no UAC prompt)
+
+.PARAMETER Degrees
+    Rotation for the rotate action: 0, 90, 180, 270, -90 (270) or 360 (0).
+
+.PARAMETER On
+    autostart: install (or replace) the "start the tray utility at logon" scheduled task.
+
+.PARAMETER Off
+    autostart: remove that scheduled task.
 
 .EXAMPLE
     .\MtTrackpad.ps1 install        # auto-detects the driver folder in the release archive
@@ -32,11 +44,15 @@
     .\MtTrackpad.ps1 battery
 .EXAMPLE
     .\MtTrackpad.ps1 wireless -Pair
+.EXAMPLE
+    .\MtTrackpad.ps1 rotate -Degrees -90
+.EXAMPLE
+    .\MtTrackpad.ps1 autostart -On        # then: .\MtTrackpad.ps1 tray
 #>
 [CmdletBinding()]
 param(
     [Parameter(Position = 0, Mandatory = $true)]
-    [ValidateSet('install', 'uninstall', 'status', 'settings', 'configure', 'battery', 'reload', 'wireless')]
+    [ValidateSet('install', 'uninstall', 'status', 'settings', 'configure', 'battery', 'reload', 'wireless', 'rotate', 'tray', 'autostart')]
     [string]$Action,
 
     # --- install / uninstall ---
@@ -56,10 +72,23 @@ param(
 
     # --- status / wireless ---
     [switch]$Json,
-    [switch]$Pair
+    [switch]$Pair,
+
+    # --- rotate ---
+    [ValidateSet('0', '90', '180', '270', '-90', '360')]
+    [string]$Degrees,
+
+    # --- autostart ---
+    [switch]$On,
+    [switch]$Off
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Absolute path of this script, needed to register the logon task.
+$script:SelfPath = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.MyCommand.Path }
+# Name of the scheduled task that starts the tray utility at logon.
+$script:AutostartTaskName = 'MtTrackpadTray'
 
 # ============================= Constants =============================
 $script:CTL_RELOAD_SETTINGS = 0x00222000   # CTL_CODE(FILE_DEVICE_UNKNOWN=0x22, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -109,9 +138,10 @@ function Invoke-MtIoctl {
     <# Sends an IOCTL to the control device. Returns $null on failure (with -Verbose detail). #>
     param(
         [uint32]$Code,
-        [bool]$ExpectData = $false
+        [switch]$ExpectData
     )
-    $GENERIC_READ = 0x80000000; $GENERIC_WRITE = 0x40000000
+    $GENERIC_READ = [int64]2147483648   # 0x80000000 (Windows PowerShell 5.1 parses the hex literal as Int32 -2147483648)
+    $GENERIC_WRITE = [int64]1073741824  # 0x40000000
     $FILE_SHARE_RW = 3; $OPEN_EXISTING = 3
 
     $h = [MtTrackpad.Kernel32]::CreateFileW(
@@ -123,37 +153,47 @@ function Invoke-MtIoctl {
         [uint32]0,
         [IntPtr]::Zero)
 
-    if ([int]$h -eq 0) {
+    # CreateFile returns INVALID_HANDLE_VALUE (-1) on failure, not NULL.
+    if ($h.ToInt64() -eq -1 -or $h -eq [IntPtr]::Zero) {
         Write-Verbose "CreateFile($script:CONTROL_DEVICE) failed: $(Get-StdCallError)"
         return $null
     }
 
     $outPtr = [IntPtr]::Zero
+    $outSize = [uint32]0
     $result = $null
     try {
         if ($ExpectData) {
             $outPtr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(4)
+            $outSize = [uint32]4
         }
         $bytesReturned = [uint32]0
         $ok = [MtTrackpad.Kernel32]::DeviceIoControl(
             $h, $Code,
             [IntPtr]::Zero, 0,
-            $outPtr, [uint32](if ($ExpectData) { 4 } else { 0 }),
+            $outPtr, $outSize,
             [ref]$bytesReturned,
             [IntPtr]::Zero)
 
         if (-not $ok) {
-            Write-Verbose "DeviceIoControl(0x{0:X}) failed: $(Get-StdCallError)" -f $Code
+            Write-Verbose ("DeviceIoControl(0x{0:X}) failed: {1}" -f $Code, (Get-StdCallError))
             return $null
         }
         if ($ExpectData) {
             $result = [System.Runtime.InteropServices.Marshal]::ReadInt32($outPtr)
         }
+        else {
+            # A successful no-data IOCTL has no value to return; return $true so
+            # callers can tell success from the $null failure result.
+            $result = $true
+        }
         return $result
     }
     finally {
         if ($outPtr -ne [IntPtr]::Zero) { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($outPtr) }
-        [MtTrackpad.Kernel32]::CloseHandle($h)
+        # [void] on CloseHandle: its Boolean return would otherwise be piped out as
+        # the function's result (making every caller see "success").
+        [void][MtTrackpad.Kernel32]::CloseHandle($h)
     }
 }
 
@@ -198,8 +238,7 @@ function Get-TrackpadStatus {
     # Control device reachability (also proves the WUDF driver instance is alive)
     $ioctlOk = $false
     try {
-        $null = Invoke-MtIoctl -Code $script:CTL_RELOAD_SETTINGS -Verbose
-        $ioctlOk = $true
+        $ioctlOk = ($null -ne (Invoke-MtIoctl -Code $script:CTL_RELOAD_SETTINGS))
     } catch { $ioctlOk = $false }
 
     $battery = $null
@@ -239,31 +278,47 @@ function Get-MtSettings {
         IgnoreButtonFinger = 1
         IgnoreNearFingers  = 1
         PalmRejection      = 1
+        Rotation           = 0
     }
-    foreach ($key in $values.Keys) {
+    # Snapshot the keys: assigning into $values while enumerating $values.Keys
+    # throws "Collection was modified" as soon as any setting actually exists.
+    foreach ($key in @($values.Keys)) {
         $v = Get-ItemProperty -Path $script:WUDF_PARAMS -Name $key -ErrorAction SilentlyContinue
-        if ($v) { $values[$key] = $v.$key }
+        if ($v) {
+            $read = $v.$key
+            # A DWORD of 0xFFFFFFFF ("cleared", e.g. StopSize) reads back as 4294967295.
+            if ($read -gt 2147483647) { $read = [int]($read - 4294967296) }
+            $values[$key] = $read
+        }
     }
     return $values
 }
 
 function Set-MtSettings {
-    <# Mirrors the upstream control panel: writes the same 8 values to BOTH the WUDF
-       service Parameters key and the kernel-mode filter service Parameters key. #>
+    <# Mirrors the upstream control panel: writes the same settings values to BOTH the
+       WUDF service Parameters key and the kernel-mode filter service Parameters key. #>
     param($Values)
 
     $keys = @($script:WUDF_PARAMS, $script:SVC_PARAMS)
     foreach ($k in $keys) {
-        $hivePath = $k -replace '^HKLM:', ''
+        # [Microsoft.Win32.Registry]::OpenSubKey takes a hive-relative path, unlike
+        # the "HKLM:\..." paths used by the PowerShell provider cmdlets.
+        $hivePath = $k -replace '^HKLM:\\?', ''
         $parts = $hivePath -split '\\'
         $subkeyName = $parts[-1]
-        $parentPath = ('HKLM:' + ($parts[0..($parts.Count - 2)] -join '\'))
+        $parentPath = ($parts[0..($parts.Count - 2)] -join '\')
         $reg = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($parentPath, $true)
-        if (-not $reg) { throw "Cannot open registry parent: $parentPath" }
+        if (-not $reg) { throw "Cannot open registry parent: HKLM\$parentPath" }
         $sub = $reg.CreateSubKey($subkeyName)
         try {
-            foreach ($name in $Values.Keys) {
-                $sub.SetValue($name, [int]$Values[$name], [Microsoft.Win32.RegistryValueKind]::DWord)
+            foreach ($name in @($Values.Keys)) {
+                # Values read back from the registry arrive as UInt32 (e.g. StopSize
+                # 0xFFFFFFFF = 4294967295) and SetValue with RegistryValueKind.DWord
+                # only accepts a signed Int32, so mask into Int64 and reinterpret.
+                # The mask must be decimal: PowerShell parses 0xFFFFFFFF as Int32 -1.
+                $dword = ([int64]$Values[$name]) -band 4294967295
+                if ($dword -gt 2147483647) { $dword -= 4294967296 }
+                $sub.SetValue($name, [int]$dword, [Microsoft.Win32.RegistryValueKind]::DWord)
             }
         }
         finally { $sub.Close(); $reg.Close() }
@@ -325,6 +380,37 @@ function Restart-TrackpadDevices {
     foreach ($d in $instances) {
         Enable-PnpDevice -InputObject $d -ErrorAction SilentlyContinue | Out-Null
     }
+}
+
+function Resolve-RotationDegrees {
+    <# Normalises the CLI/GUI rotation value to the 0/90/180/270 the driver understands. #>
+    param([string]$Value)
+    $d = [int]$Value
+    if ($d -eq -90) { $d = 270 }
+    if ($d -eq 360) { $d = 0 }
+    if (@(0, 90, 180, 270) -notcontains $d) {
+        throw "Unsupported rotation '$Value' (use 0, 90, 180 or -90)."
+    }
+    return $d
+}
+
+function Set-MtRotation {
+    <# Writes the Rotation DWORD to both parameter keys and reloads the driver.
+       The HID report descriptor is only re-read when the device restarts, so a
+       PnP restart is always part of the change. Returns a status string. #>
+    param([int]$RotationValue)
+
+    $values = Get-MtSettings
+    $values.Rotation = $RotationValue
+    Set-MtSettings -Values $values
+
+    $ioctl = Invoke-MtIoctl -Code $script:CTL_RELOAD_SETTINGS
+    Restart-TrackpadDevices
+
+    if ($null -ne $ioctl) {
+        return "Rotation set to $RotationValue degrees (IOCTL reload + device restart)."
+    }
+    return "Rotation set to $RotationValue degrees (device restart)."
 }
 
 # ============================= Actions =============================
@@ -513,6 +599,20 @@ function Invoke-Reload {
     Write-Output "Trackpad devices restarted."
 }
 
+function Invoke-Rotate {
+    param([string]$DegreesArg)
+
+    if (-not $DegreesArg) {
+        $current = Get-MtSettings
+        Write-Output "Current rotation: $($current.Rotation) degrees. Use -Degrees 0|90|180|-90."
+        return
+    }
+    if (-not (Test-Admin)) { Write-Output "WARN: not running elevated; registry writes may fail" }
+
+    $degrees = Resolve-RotationDegrees -Value $DegreesArg
+    Write-Output (Set-MtRotation -RotationValue $degrees)
+}
+
 function Invoke-Wireless {
     <#
     Lists Bluetooth HID devices, optionally starts the pairing UI, and reports hardware IDs
@@ -554,6 +654,204 @@ function Invoke-Wireless {
     Write-Output "then re-run: .\MtTrackpad.ps1 install -DriverDir <dir>"
 }
 
+# ============================= Autostart (logon task) =============================
+
+function Get-MtAutostartTask {
+    Get-ScheduledTask -TaskName $script:AutostartTaskName -ErrorAction SilentlyContinue
+}
+
+function Invoke-Autostart {
+    <#
+    A real Windows service runs in session 0 and cannot own a notification-area icon,
+    so the tray utility is started by a logon scheduled task instead. The task runs
+    with the highest available privileges, which is what removes the UAC consent
+    prompt (and its ~2 minute auto-deny timeout) at logon.
+    #>
+    param([switch]$Enable, [switch]$Disable)
+
+    if ($Enable -or $Disable) {
+        if (-not (Test-Admin)) { throw 'autostart changes require an elevated shell' }
+    }
+
+    $task = Get-MtAutostartTask
+
+    if ($Disable) {
+        if ($task) {
+            Unregister-ScheduledTask -TaskName $script:AutostartTaskName -Confirm:$false
+            Write-Output "Autostart removed (scheduled task '$script:AutostartTaskName')."
+        }
+        else {
+            Write-Output 'Autostart was not configured.'
+        }
+        return
+    }
+
+    if ($Enable) {
+        $scriptPath = (Resolve-Path -LiteralPath $script:SelfPath).Path
+        # $env:USERDOMAIN is empty in SSH/remote sessions, so take the account from
+        # the token instead of the environment.
+        $userId = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        # Reuse the interpreter this script is running under (bare "powershell.exe"
+        # would be resolved through PATH by the task scheduler).
+        $hostExe = (Get-Process -Id $PID -ErrorAction SilentlyContinue).Path
+        if (-not $hostExe) { $hostExe = 'powershell.exe' }
+        $action = New-ScheduledTaskAction -Execute $hostExe `
+            -Argument ('-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}" tray' -f $scriptPath)
+        $trigger = New-ScheduledTaskTrigger -AtLogOn -User $userId
+        $principal = New-ScheduledTaskPrincipal -UserId $userId -LogonType Interactive -RunLevel Highest
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+            -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+        Register-ScheduledTask -TaskName $script:AutostartTaskName -Action $action -Trigger $trigger `
+            -Principal $principal -Settings $settings -Force -ErrorAction Stop `
+            -Description 'Starts the Magic Trackpad control utility in the notification area (elevated, no UAC prompt).' | Out-Null
+        if (-not (Get-MtAutostartTask)) {
+            throw 'the scheduled task was not created'
+        }
+        Write-Output "Autostart enabled: task '$script:AutostartTaskName' runs '$scriptPath tray' at logon as $userId (highest privileges)."
+        return
+    }
+
+    if ($task) {
+        $info = Get-ScheduledTaskInfo -TaskName $script:AutostartTaskName -ErrorAction SilentlyContinue
+        Write-Output "Autostart: ON (task '$script:AutostartTaskName', state $($task.State), last run $($info.LastRunTime))"
+        Write-Output "Task action: $((@($task.Actions) | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join '; ')"
+    }
+    else {
+        Write-Output 'Autostart: OFF (enable with: .\MtTrackpad.ps1 autostart -On)'
+    }
+}
+
+# ============================= Notification area =============================
+
+$script:TrayIcon = $null
+$script:TrayRotationItems = @{}
+
+function Show-TrayBalloon {
+    param([string]$Title, [string]$Text, [int]$TimeoutMs = 2500)
+    if (-not $script:TrayIcon) { return }
+    $script:TrayIcon.BalloonTipTitle = $Title
+    $script:TrayIcon.BalloonTipText = $Text
+    $script:TrayIcon.ShowBalloonTip($TimeoutMs)
+}
+
+function Update-TrayRotationChecks {
+    $current = 0
+    try { $current = [int](Get-MtSettings).Rotation } catch { }
+    foreach ($key in @($script:TrayRotationItems.Keys)) {
+        $script:TrayRotationItems[$key].Checked = ($key -eq $current)
+    }
+}
+
+function Invoke-Tray {
+    <# Resident notification-area icon. Started by the autostart task, which runs
+       elevated, so the registry writes and the PnP device restart work without any
+       UAC prompt at logon. #>
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
+    $menu = New-Object System.Windows.Forms.ContextMenuStrip
+
+    $header = $menu.Items.Add('Magic Trackpad')
+    $header.Enabled = $false
+
+    $rotationMenu = New-Object System.Windows.Forms.ToolStripMenuItem('Rotation')
+    foreach ($option in @(
+            @{ Degrees = 0;   Label = '0 degrees (default)' },
+            @{ Degrees = 90;  Label = '90 degrees' },
+            @{ Degrees = 180; Label = '180 degrees' },
+            @{ Degrees = 270; Label = '-90 degrees' })) {
+        $item = New-Object System.Windows.Forms.ToolStripMenuItem($option.Label)
+        $item.Tag = [int]$option.Degrees
+        $item.add_Click({
+            param($sender, $eventArgs)
+            $degrees = [int]$sender.Tag
+            try {
+                $null = Set-MtRotation -RotationValue $degrees
+                Show-TrayBalloon -Title 'Magic Trackpad' -Text "Rotation set to $degrees degrees."
+            }
+            catch {
+                Show-TrayBalloon -Title 'Magic Trackpad' -Text "Rotation failed: $($_.Exception.Message)" -TimeoutMs 4000
+            }
+            Update-TrayRotationChecks
+        })
+        $script:TrayRotationItems[[int]$option.Degrees] = $item
+        [void]$rotationMenu.DropDownItems.Add($item)
+    }
+    [void]$menu.Items.Add($rotationMenu)
+
+    [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+
+    $reloadItem = New-Object System.Windows.Forms.ToolStripMenuItem('Reload driver')
+    $reloadItem.add_Click({
+        param($sender, $eventArgs)
+        try {
+            Invoke-Reload | Out-Null
+            Show-TrayBalloon -Title 'Magic Trackpad' -Text 'Driver reloaded.'
+        }
+        catch {
+            Show-TrayBalloon -Title 'Magic Trackpad' -Text "Reload failed: $($_.Exception.Message)" -TimeoutMs 4000
+        }
+    })
+    [void]$menu.Items.Add($reloadItem)
+
+    $statusItem = New-Object System.Windows.Forms.ToolStripMenuItem('Status')
+    $statusItem.add_Click({
+        param($sender, $eventArgs)
+        try {
+            $s = Get-TrackpadStatus
+            Show-TrayBalloon -Title 'Magic Trackpad' -TimeoutMs 4000 `
+                -Text "present=$($s.trackpadPresent); control-device=$($s.controlDeviceReachable); battery=$($s.batteryPercent)"
+        }
+        catch {
+            Show-TrayBalloon -Title 'Magic Trackpad' -Text "Status failed: $($_.Exception.Message)" -TimeoutMs 4000
+        }
+    })
+    [void]$menu.Items.Add($statusItem)
+
+    $autostartItem = New-Object System.Windows.Forms.ToolStripMenuItem('Start at logon')
+    $autostartItem.Checked = [bool](Get-MtAutostartTask)
+    $autostartItem.add_Click({
+        param($sender, $eventArgs)
+        try {
+            if (Get-MtAutostartTask) {
+                Invoke-Autostart -Disable | Out-Null
+                Show-TrayBalloon -Title 'Magic Trackpad' -Text 'Autostart disabled.'
+            }
+            else {
+                Invoke-Autostart -Enable | Out-Null
+                Show-TrayBalloon -Title 'Magic Trackpad' -Text 'Autostart enabled (runs elevated at logon).'
+            }
+        }
+        catch {
+            Show-TrayBalloon -Title 'Magic Trackpad' -Text "Autostart change failed: $($_.Exception.Message)" -TimeoutMs 4000
+        }
+        $sender.Checked = [bool](Get-MtAutostartTask)
+    })
+    [void]$menu.Items.Add($autostartItem)
+
+    [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+
+    $exitItem = New-Object System.Windows.Forms.ToolStripMenuItem('Exit')
+    $exitItem.add_Click({
+        param($sender, $eventArgs)
+        if ($script:TrayIcon) { $script:TrayIcon.Visible = $false }
+        [System.Windows.Forms.Application]::Exit()
+    })
+    [void]$menu.Items.Add($exitItem)
+
+    $script:TrayIcon = New-Object System.Windows.Forms.NotifyIcon
+    $script:TrayIcon.Icon = [System.Drawing.SystemIcons]::Application
+    $script:TrayIcon.Text = 'Magic Trackpad control'
+    $script:TrayIcon.ContextMenuStrip = $menu
+    $script:TrayIcon.Visible = $true
+
+    Update-TrayRotationChecks
+    Show-TrayBalloon -Title 'Magic Trackpad' -Text 'Control utility running. Rotation is in the tray menu.'
+
+    [System.Windows.Forms.Application]::Run()
+    $script:TrayIcon.Dispose()
+}
+
 # ============================= Dispatch =============================
 switch ($Action) {
     'install'   { Invoke-Install -Dir $DriverDir }
@@ -564,4 +862,7 @@ switch ($Action) {
     'battery'   { Invoke-Battery }
     'reload'    { Invoke-Reload }
     'wireless'  { Invoke-Wireless }
+    'rotate'    { Invoke-Rotate -DegreesArg $Degrees }
+    'tray'      { Invoke-Tray }
+    'autostart' { Invoke-Autostart -Enable:$On -Disable:$Off }
 }

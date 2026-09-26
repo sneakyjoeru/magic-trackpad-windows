@@ -378,7 +378,7 @@ namespace AmtPtpControlPanel
             this.ctlStartAuto.Name = "ctlStartAuto";
             this.ctlStartAuto.Size = new System.Drawing.Size(400, 24);
             this.ctlStartAuto.TabIndex = 0;
-            this.ctlStartAuto.Text = "Start automatically at login (one UAC prompt per login)";
+            this.ctlStartAuto.Text = "Start automatically at login (elevated logon task, no UAC prompt)";
             this.ctlStartAuto.UseVisualStyleBackColor = true;
             //
             // ctlStartHidden

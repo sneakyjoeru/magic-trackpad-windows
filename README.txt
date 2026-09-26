@@ -1,4 +1,4 @@
-Apple Magic Trackpad Setup Utility + Drivers v1.0
+﻿Apple Magic Trackpad Setup Utility + Drivers v1.0
 =================================================
 
 WHAT THIS IS
@@ -30,7 +30,7 @@ WHAT THIS IS
   * Explanatory tooltips on every option in the settings window.
 
   * "Startup" group in the settings window:
-      "Start automatically at login (one UAC prompt per login)"
+      "Start automatically at login (elevated logon task, no UAC prompt)"
       "Start hidden in system tray"
     both mirror the tray-menu items "Start with Windows" / "Start minimized".
     Stored per user in HKCU\Software\MtTrackpad\Tray; the autostart entry is
@@ -63,7 +63,8 @@ USE
                          size, palm rejection, finger filtering, battery).
     Battery: NN %      - current charge (Bluetooth only).
     Show battery percentage in tray - toggle, shows the live value.
-    Start with Windows - run at every logon (one UAC prompt per logon).
+    Start with Windows - elevated logon task, no UAC prompt at logon.
+    Rotation           - submenu: 0 / 90 / 180 / -90 degrees (driver support needed).
     Start minimized    - start in the tray without opening the window.
     Exit               - stop the app.
 
