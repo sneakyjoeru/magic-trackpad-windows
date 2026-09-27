@@ -1,5 +1,5 @@
-﻿AmtPtpControlPanel - tray control panel for the Magic Trackpad (v1.0.7)
-=========================================================================
+AmtPtpControlPanel - tray control panel for the Magic Trackpad (v1.1 package)
+============================================================================
 
 WHAT THIS IS
   The system-tray companion for the Magic Trackpad Windows driver (see
@@ -33,6 +33,20 @@ WHAT THIS IS
     logon task "MagicTrackpad" (schtasks /SC ONLOGON /RL HIGHEST), so the app starts
     elevated with no UAC prompt.
 
+  * "Rotation" group in the settings window ("Trackpad:") - 0 / 90 / 180 / -90
+    degrees, the same setting as the tray menu's "Rotation" submenu. Written to
+    the driver's Rotation parameter; the trackpad restarts once because the HID
+    report descriptor is re-read only at device start. Needs the self-signed
+    driver built with rotation support (the Microsoft-signed driver ignores it,
+    Bluetooth has no rotation yet).
+
+  * "Force click" group in the settings window - the on/off switch, the action a
+    firm press performs and a pressure-threshold slider (1-255) with the current
+    value shown next to it. The slider writes once you stop dragging. Needs the
+    force-click driver build; the Microsoft-signed driver has no pressure
+    interface and ignores it. Both groups report Secure Boot / test signing
+    state, because that decides whether the self-signed driver can load at all.
+
 REQUIREMENTS
   * Windows 10/11 x64
   * The trackpad driver installed - INSTALL.txt / install.ps1 does that
@@ -61,7 +75,8 @@ USE
     Battery: NN %      - current charge (Bluetooth only).
     Show battery percentage in tray - toggle, shows the live value.
     Start with Windows - elevated logon task, no UAC prompt at logon.
-    Rotation           - submenu: 0 / 90 / 180 / -90 degrees (driver support needed).
+    Rotation           - submenu: 0 / 90 / 180 / -90 degrees (driver support needed;
+                         also a "Rotation" group in the settings window).
     Start minimized    - start in the tray without opening the window.
     Exit               - stop the app.
 

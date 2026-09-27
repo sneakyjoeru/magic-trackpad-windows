@@ -1,5 +1,5 @@
 <#
-    Apple Magic Trackpad Setup Utility + Drivers v1.0 - installer
+    Apple Magic Trackpad Setup Utility + Drivers v1.1 - installer
     ============================================================
 
     (Driver + panel from vitoplantamura/MagicTrackpad2ForWindows and
@@ -553,7 +553,7 @@ function Uninstall-All {
 # ------------------------------- main -------------------------------
 
 Write-Host ''
-Write-Host 'Apple Magic Trackpad Setup Utility + Drivers v1.0' -ForegroundColor White
+Write-Host 'Apple Magic Trackpad Setup Utility + Drivers v1.1' -ForegroundColor White
 Write-Host "  archive : $root"
 Write-Host ''
 

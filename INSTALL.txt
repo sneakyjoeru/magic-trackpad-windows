@@ -1,4 +1,4 @@
-﻿Apple Magic Trackpad Setup Utility + Drivers v1.0
+Apple Magic Trackpad Setup Utility + Drivers v1.1
 =================================================
 
 This archive contains EVERYTHING needed on a fresh Windows host: the
@@ -79,18 +79,26 @@ automatically:
        .\utility\Verify-MtTrackpad.ps1
 
 --------------------------------------------------------------------------------
-FORCE CLICK (optional)
+OPTIONAL FEATURES (need the self-signed driver archive)
 --------------------------------------------------------------------------------
-  A firm press can act as a second click (right button by default). That needs
-  the optional self-signed driver variant, because the pressure value only
-  exists inside the driver and a modified driver cannot keep Microsoft's
-  signature. It ships as a separate archive:
+  Both features live in the driver, because the values they use (pressure,
+  contact remapping) exist only inside it - and a modified driver cannot keep
+  Microsoft's signature. They ship in one separate archive:
 
-      Apple Magic Trackpad Setup Utility + Drivers v1.0 (force click, self-signed)
+      Apple Magic Trackpad Setup Utility + Drivers v1.1 (self-signed)
 
-  Using it requires Windows test signing (bcdedit /set testsigning on + reboot,
-  Secure Boot off). See FORCE-CLICK.txt in that archive. Everything else is
-  identical; the signed package here ignores the settings.
+  * FORCE CLICK - a firm press acts as a second click (right button by default).
+    In the settings window: the "Force click" group, with the action and a
+    pressure-threshold slider (the current value is shown next to it).
+
+  * ROTATION - the trackpad input is turned in 90 degree steps: 0 / 90 / 180 /
+    -90 degrees. In the settings window: the "Rotation" group; the same entries
+    are in the tray menu's "Rotation" submenu.
+
+  Using them requires Windows test signing (bcdedit /set testsigning on + reboot,
+  Secure Boot off) and Install.cmd -SelfSigned from that archive. See
+  FORCE-CLICK.txt and ROTATION.txt in that archive. Everything else is identical;
+  the Microsoft-signed package here ignores both settings.
 
 --------------------------------------------------------------------------------
 REQUIREMENTS

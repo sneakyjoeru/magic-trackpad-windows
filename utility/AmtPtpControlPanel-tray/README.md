@@ -29,9 +29,11 @@ WinForms control panel (`driver/AmtPtpControlPanel`) and extended with:
   *Start with Windows* / *Start minimized*. Stored per user in
   `HKCU\Software\MtTrackpad\Tray`; the entry itself is the logon task `MagicTrackpad`
   (`schtasks /SC ONLOGON /RL HIGHEST`), so the app starts elevated with **no UAC prompt**.
-- **Rotation** (tray menu) — 0°, 90°, 180°, −90°. Writes the driver's `Rotation` value and
-  restarts the trackpad once so the driver re-reads its report descriptor. Needs a driver
-  built with rotation support; with the Microsoft-signed driver the menu is inert.
+- **Rotation** — 0°, 90°, 180°, −90°, as the tray menu's *Rotation* submenu **and** as a
+  *Rotation* group in the settings window (both show the same selection and write the same
+  driver value). Writes the driver's `Rotation` value and restarts the trackpad once so the
+  driver re-reads its report descriptor. Needs a driver built with rotation support; with the
+  Microsoft-signed driver the setting is inert.
 
 Settings persist to the same vendor registry location the original panel uses
 (`HKLM\...\WUDF\Services\AmtPtpDeviceUsbUm\Parameters`), so both panels control the
@@ -41,7 +43,9 @@ same driver configuration. *Apply* hot‑reloads the driver — no reboot.
 
 The settings window has a **Force click** group: a firm press can act as a second click. Pick the
 action (right mouse button - the default, middle, double left click, mouse back/forward,
-Ctrl + Left click, Enter, or nothing) and the pressure threshold (raw 1-255). The driver signals a
+Ctrl + Left click, Enter, or nothing) and drag the **pressure-threshold slider** (raw 1-255, the
+current value is shown next to it; the value is written once you stop dragging, not on every
+step). The driver signals a
 named event (`Global\MagicTrackpad.ForceClick`) and the panel performs the action with `SendInput`.
 
 This needs the optional **self-signed force-click driver** (`-SelfSigned` install, test signing on):

@@ -9,12 +9,15 @@ that carries it can no longer hold Microsoft's signature. Like force click,
 this variant is SELF-SIGNED and needs Windows test signing.
 
 WHAT YOU GET
-  * Tray icon - right-click -> "Rotation":
+  * "Rotation" group in the settings window ("Trackpad:") with the four
+    entries, and the same entries in the tray icon menu - right-click ->
+    "Rotation":
         0 degrees (default)
         90 degrees
         180 degrees
         -90 degrees
 
+    Both write the same driver parameter and always show the same selection.
     The value is written to the driver's "Rotation" parameter and the trackpad
     restarts once, because the host re-reads the HID report descriptor only when
     the device restarts.

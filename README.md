@@ -21,7 +21,7 @@ with the additions this repo needs in practice:
 
 ## Install
 
-1. Download **Apple Magic Trackpad Setup Utility + Drivers v1.0** from
+1. Download **Apple Magic Trackpad Setup Utility + Drivers v1.1** from
    [Releases](../../releases/latest) and extract it.
 2. Double‑click **`Install.cmd`** and confirm the UAC prompt.
 
@@ -64,12 +64,16 @@ Tray control panel (right‑click the tray icon):
   opening the tray menu. Bluetooth only — over USB‑C it shows a grey `?`.
 - **Force click (optional)** — a firm press can act as a second click: right mouse button
   (default), middle mouse button, double left click, mouse back/forward, Ctrl + Left click,
-  Enter, or nothing, with a tunable pressure threshold. Pressure only exists inside the driver,
+  Enter, or nothing, with a **pressure-threshold slider** (1–255, current value next to it;
+  written once you stop dragging) in the settings window's *Force click* group. Pressure only
+  exists inside the driver,
   so this needs the optional **self-signed force-click driver** (test signing on that machine) —
-  see `FORCE-CLICK.txt` in the "(force click, self-signed)" archive. The driver signals a named
+  see `FORCE-CLICK.txt` in the "(self-signed)" archive. The driver signals a named
   event and the panel performs the action with `SendInput` (event driven, no polling); with the
   Microsoft-signed driver the option stays inert.
-- **Rotation** (tray menu) — rotate the trackpad input in 90° steps: 0°, 90°, 180°, −90°. The
+- **Rotation** — rotate the trackpad input in 90° steps: 0°, 90°, 180°, −90°, from the tray
+  menu's *Rotation* submenu **and** from the settings window's *Rotation* group (same setting,
+  same selection). The
   setting goes to the driver and the trackpad restarts once so the driver re-reads its HID report
   descriptor. Needs a **driver built with rotation support** — the Microsoft-signed driver
   predates it (same situation as force click), so use the self-signed archive for this.
@@ -112,6 +116,8 @@ magic-trackpad-windows/
 │   ├── build/                   INFs + make.bat / make_win10.bat
 │   └── prebuilt/
 │       ├── ms-signed-amd64/     the shipped package (Microsoft-signed, no test signing)
+│       ├── rotation-selfsigned/ built-from-source rotation + force click package (self-signed)
+│       ├── forceclick-selfsigned/ earlier force-click-only build
 │       └── win10-x64/           optional self-signed variant (VID 27A7 clones)
 └── utility/
     ├── MtTrackpad.ps1           setup / control utility (headless)

@@ -19,12 +19,12 @@ certificates, tray control panel and utilities. Two paths: install the ready-mad
 
 ## Path A — install the ready-made package (recommended)
 
-1. Download `Apple Magic Trackpad Setup Utility + Drivers v1.0` from
+1. Download `Apple Magic Trackpad Setup Utility + Drivers v1.1` from
    [Releases](../../releases/latest) and extract it (e.g. to `C:\MagicTrackpad`).
    The archive is self-contained:
 
    ```
-   Apple Magic Trackpad Setup Utility + Drivers v1.0/
+   Apple Magic Trackpad Setup Utility + Drivers v1.1/
      Install.cmd              DOUBLE-CLICK THIS (asks for admin rights once)
      Uninstall.cmd            one-click removal (panel, autostart, driver, certs)
      install.ps1              one-shot installer / uninstaller (the actual steps)

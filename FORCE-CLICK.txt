@@ -1,7 +1,7 @@
 Force click - optional self-signed driver variant
 =================================================
 
-This archive is the normal "Apple Magic Trackpad Setup Utility + Drivers v1.0"
+This archive is the normal "Apple Magic Trackpad Setup Utility + Drivers v1.1"
 package plus a driver that can turn a FIRM PRESS on the trackpad into a second
 click. The Microsoft-signed driver cannot do this: the pressure value only
 exists inside the driver, and a modified driver cannot carry Microsoft's
@@ -11,7 +11,7 @@ WHAT YOU GET
   * "Force click" group at the bottom of the settings window:
       [ ] Simulate force click (press harder for a second click)
       Action on force press:  [ Right mouse button (default) v ]
-      Pressure threshold (1-255): [ 150 ]
+      Pressure threshold:     [ =====|========= ]  200
 
   * Actions available:
       Right mouse button (default)   - the classic "two finger click"
@@ -33,7 +33,10 @@ WHAT YOU GET
     that would end a drag.
 
   * Pressure threshold: how hard you must press before the action fires
-    (raw value 1-255; the default is 200 - raise it if a normal click triggers the action, lower it if you have to press too hard). The
+    (raw value 1-255, the current number is shown next to the slider; the
+    default is 200 - raise it if a normal click triggers the action, lower it if
+    you have to press too hard). The slider writes the value once you stop
+    dragging it. The
     driver signals the panel through a named event, which performs the action
     with SendInput - event driven, so nothing polls and nothing keeps the
     trackpad or its radio awake.
@@ -83,8 +86,9 @@ INSTALL
      driver-self-signed\ and starts the panel. The normal Microsoft-signed
      package in driver\ stays untouched, so you can switch back at any time.
 
-  3. Open the panel, tick "Simulate force click", pick the action and tune the
-     threshold. Applying also nudges the driver to re-read its settings.
+  3. Open the panel, tick "Simulate force click", pick the action and drag the
+     pressure slider until a normal click no longer triggers the action.
+     Applying also nudges the driver to re-read its settings.
 
 GOING BACK TO THE SIGNED DRIVER (no test signing, no force click)
          Uninstall-All-Apple-Drivers.cmd

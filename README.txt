@@ -1,4 +1,4 @@
-﻿Apple Magic Trackpad Setup Utility + Drivers v1.0
+Apple Magic Trackpad Setup Utility + Drivers v1.1
 =================================================
 
 WHAT THIS IS
@@ -33,8 +33,24 @@ WHAT THIS IS
       "Start automatically at login (elevated logon task, no UAC prompt)"
       "Start hidden in system tray"
     both mirror the tray-menu items "Start with Windows" / "Start minimized".
-    Stored per user in HKCU\Software\MtTrackpad\Tray; the autostart entry is
-    HKCU\...\CurrentVersion\Run "Magic Trackpad".
+    Stored per user in HKCU\Software\MtTrackpad\Tray. The autostart entry is an
+    elevated logon scheduled task (schtasks /SC ONLOGON /RL HIGHEST, task name
+    "MagicTrackpad"), not an HKCU\...\Run value: Windows starts the panel with
+    an admin token, so no UAC dialog appears at logon. An old Run entry is
+    deleted the first time the new panel runs.
+
+  * "Rotation" group in the settings window (0 / 90 / 180 / -90 degrees), the
+    same setting as the tray menu's "Rotation" submenu. It is written to the
+    driver's Rotation parameter and the trackpad restarts once, because the
+    host re-reads the HID report descriptor only when the device restarts.
+    Needs the self-signed driver built with rotation support - the
+    Microsoft-signed driver ignores it, and the Bluetooth path has no rotation
+    yet.
+
+  * "Force click" group in the settings window: a tray-wide switch, the action
+    a firm press performs and a pressure-threshold slider (1-255) with the
+    current value shown next to it. Needs the force-click driver build; the
+    Microsoft-signed driver has no pressure interface and ignores it.
 
 REQUIREMENTS
   * Windows 10/11 x64
@@ -64,7 +80,8 @@ USE
     Battery: NN %      - current charge (Bluetooth only).
     Show battery percentage in tray - toggle, shows the live value.
     Start with Windows - elevated logon task, no UAC prompt at logon.
-    Rotation           - submenu: 0 / 90 / 180 / -90 degrees (driver support needed).
+    Rotation           - submenu: 0 / 90 / 180 / -90 degrees (driver support needed;
+                         also a "Rotation" group in the settings window).
     Start minimized    - start in the tray without opening the window.
     Exit               - stop the app.
 

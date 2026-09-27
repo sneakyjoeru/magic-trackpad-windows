@@ -56,6 +56,7 @@ namespace AmtPtpControlPanel
         {
             WireControlTooltips();
             BuildForceClickUi();
+            BuildRotationUi();
 
             try
             {
@@ -117,6 +118,7 @@ namespace AmtPtpControlPanel
                 // the user is looking at the app: poll while that lasts and
                 // read once right away
                 RefreshForceClickStatus();
+                RefreshRotationChecks();
                 StartBatteryPolling();
                 if ((System.DateTime.Now - lastUiRefresh)
                         .TotalMilliseconds > 1000)
@@ -927,10 +929,18 @@ namespace AmtPtpControlPanel
         private CheckBox ctlForceClick;
         private Label ctlForceStatus;
         private ComboBox ctlForceAction;
-        private TextBox ctlForcePressure;
+        private TrackBar ctlForcePressure;
+        private Label ctlForcePressureValue;
+        private System.Windows.Forms.Timer forceClickApplyTimer;
         private System.Threading.EventWaitHandle forceClickEvent;
         private int forceClickAction = 0;
         private int forceClickPressure = 0;
+
+        // Rotation group of the settings window (twin of the tray submenu).
+        private RadioButton[] ctlRotationRadios;
+        private Label ctlRotationStatus;
+        // bottom edge of the last runtime-built group, so the next one stacks
+        private int uiStackBottom = 0;
 
         private static readonly string[] ForceClickActions = new string[]
         {
@@ -958,7 +968,7 @@ namespace AmtPtpControlPanel
 
                 GroupBox g = new GroupBox();
                 g.Text = "Force click  (needs the force-click driver build)";
-                g.Size = new System.Drawing.Size(gw, 118);
+                g.Size = new System.Drawing.Size(gw, 156);
                 g.Location = new System.Drawing.Point(gx, gy);
                 g.TabIndex = 18;
 
@@ -985,29 +995,47 @@ namespace AmtPtpControlPanel
                 ctlForceAction.Items.AddRange(ForceClickActions);
                 g.Controls.Add(ctlForceAction);
 
+                // Pressure threshold is a slider with the raw value next to it:
+                // the value only matters relative to a firm press, and a slider
+                // shows where the current setting sits in the 1-255 range.
                 Label lblPressure = new Label();
                 lblPressure.AutoSize = false;
-                lblPressure.Location = new System.Drawing.Point(gw - 330, 52);
-                lblPressure.Size = new System.Drawing.Size(190, 20);
-                lblPressure.Text = "Pressure threshold (1-255):";
+                lblPressure.Location = new System.Drawing.Point(16, 83);
+                lblPressure.Size = new System.Drawing.Size(150, 20);
+                lblPressure.Text = "Pressure threshold:";
                 g.Controls.Add(lblPressure);
 
-                ctlForcePressure = new TextBox();
-                ctlForcePressure.Location = new System.Drawing.Point(gw - 132, 49);
-                ctlForcePressure.Size = new System.Drawing.Size(54, 21);
-                ctlForcePressure.TextAlign = HorizontalAlignment.Center;
+                ctlForcePressure = new TrackBar();
+                ctlForcePressure.AutoSize = false;
+                ctlForcePressure.Location = new System.Drawing.Point(170, 74);
+                ctlForcePressure.Size = new System.Drawing.Size(240, 32);
+                ctlForcePressure.Minimum = 1;
+                ctlForcePressure.Maximum = 255;
+                ctlForcePressure.TickFrequency = 32;
+                ctlForcePressure.SmallChange = 5;
+                ctlForcePressure.LargeChange = 25;
+                ctlForcePressure.Value = 200;
                 g.Controls.Add(ctlForcePressure);
+
+                ctlForcePressureValue = new Label();
+                ctlForcePressureValue.AutoSize = false;
+                ctlForcePressureValue.Location = new System.Drawing.Point(418, 83);
+                ctlForcePressureValue.Size = new System.Drawing.Size(60, 20);
+                ctlForcePressureValue.Text = "200";
+                ctlForcePressureValue.TextAlign = ContentAlignment.MiddleLeft;
+                g.Controls.Add(ctlForcePressureValue);
 
                 // Which firmware/signing state is this machine in? It decides
                 // whether the self-signed force-click driver can load at all.
                 ctlForceStatus = new Label();
                 ctlForceStatus.AutoSize = false;
-                ctlForceStatus.Location = new System.Drawing.Point(16, 74);
+                ctlForceStatus.Location = new System.Drawing.Point(16, 112);
                 ctlForceStatus.Size = new System.Drawing.Size(inner, 36);
                 ctlForceStatus.Text = ForceClickStatusText();
                 g.Controls.Add(ctlForceStatus);
 
                 this.Controls.Add(g);
+                uiStackBottom = g.Bottom;
 
                 // make room for the group
                 int needed = g.Bottom + 14;
@@ -1020,8 +1048,24 @@ namespace AmtPtpControlPanel
                 if (forceClickAction < 0 || forceClickAction >= ForceClickActions.Length)
                     forceClickAction = 0;
                 ctlForceAction.SelectedIndex = forceClickAction;
-                ctlForcePressure.Text = (forceClickPressure > 0 ? forceClickPressure : 200).ToString();
+
+                int initialPressure = (forceClickPressure > 0) ? forceClickPressure : 200;
+                if (initialPressure < ctlForcePressure.Minimum) initialPressure = ctlForcePressure.Minimum;
+                if (initialPressure > ctlForcePressure.Maximum) initialPressure = ctlForcePressure.Maximum;
+                ctlForcePressure.Value = initialPressure;
+                ctlForcePressureValue.Text = initialPressure.ToString();
                 ctlForceClick.Checked = forceClickPressure > 0;
+
+                // Dragging a slider fires ValueChanged for every step; writing the
+                // registry and asking the driver to re-read on each of them is
+                // pointless, so the write happens once the user stops moving.
+                forceClickApplyTimer = new System.Windows.Forms.Timer();
+                forceClickApplyTimer.Interval = 250;
+                forceClickApplyTimer.Tick += (s, e) =>
+                {
+                    forceClickApplyTimer.Stop();
+                    ApplyForceClickSettings();
+                };
 
                 ctlForceClick.CheckedChanged += (s, e) =>
                 {
@@ -1031,9 +1075,12 @@ namespace AmtPtpControlPanel
                 {
                     ApplyForceClickSettings();
                 };
-                ctlForcePressure.TextChanged += (s, e) =>
+                ctlForcePressure.ValueChanged += (s, e) =>
                 {
-                    ApplyForceClickSettings();
+                    if (ctlForcePressureValue != null && !ctlForcePressureValue.IsDisposed)
+                        ctlForcePressureValue.Text = ctlForcePressure.Value.ToString();
+                    forceClickApplyTimer.Stop();
+                    forceClickApplyTimer.Start();
                 };
 
                 if (tipOptions != null)
@@ -1054,8 +1101,9 @@ namespace AmtPtpControlPanel
                         "Ctrl + left click or Enter. 'Do nothing' keeps the driver setting but " +
                         "performs no action.");
                     tipOptions.SetToolTip(ctlForcePressure,
-                        "Raw pressure value (1-255) at which the action fires. Around 120-180 is a " +
-                        "firm press on most units. Lower = easier to trigger.");
+                        "Raw pressure value (1-255) at which the action fires; the number next to " +
+                        "the slider is the current value. Around 120-180 is a firm press on most " +
+                        "units. Lower = easier to trigger, higher = needs a harder press.");
                 }
 
                 StartForceClickListener();
@@ -1095,33 +1143,49 @@ namespace AmtPtpControlPanel
         // "Secure Boot: OFF | test signing: OFF" plus the reason it matters.
         private static string ForceClickStatusText()
         {
-            string secureBoot;
+            string secureBoot = SecureBootState();
+            string testSigning = TestSigningState();
+
+            bool blocked = (secureBoot == "ON") && (testSigning != "ON");
+
+            return "Secure Boot: " + secureBoot + "     test signing: " + testSigning +
+                (blocked ? "     -> cannot load the force-click driver as configured" : "") +
+                "\r\nThe force-click driver is self-signed: it loads only with Secure Boot OFF " +
+                "(our certificate is trusted in that case) or with test signing ON. With Secure Boot " +
+                "on, use the Microsoft-signed driver - force click stays unavailable.";
+        }
+
+        private static string SigningStatusLine()
+        {
+            return "Secure Boot: " + SecureBootState() + "     test signing: " + TestSigningState();
+        }
+
+        private static string SecureBootState()
+        {
             try
             {
                 uint fw;
                 bool uefi = GetFirmwareType(out fw) && fw == 2;   // 2 = UEFI
                 if (!uefi)
+                    return "not applicable (legacy BIOS)";
+
+                object v = null;
+                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(
+                        @"SYSTEM\CurrentControlSet\Control\SecureBoot\State"))
                 {
-                    secureBoot = "not applicable (legacy BIOS)";
+                    if (k != null)
+                        v = k.GetValue("UEFISecureBootEnabled");
                 }
-                else
-                {
-                    object v = null;
-                    using (RegistryKey k = Registry.LocalMachine.OpenSubKey(
-                            @"SYSTEM\CurrentControlSet\Control\SecureBoot\State"))
-                    {
-                        if (k != null)
-                            v = k.GetValue("UEFISecureBootEnabled");
-                    }
-                    secureBoot = (v is int) ? (((int)v) != 0 ? "ON" : "OFF") : "unknown";
-                }
+                return (v is int) ? (((int)v) != 0 ? "ON" : "OFF") : "unknown";
             }
             catch
             {
-                secureBoot = "unknown";
+                return "unknown";
             }
+        }
 
-            string testSigning = "off";
+        private static string TestSigningState()
+        {
             try
             {
                 using (RegistryKey k = Registry.LocalMachine.OpenSubKey(
@@ -1132,21 +1196,14 @@ namespace AmtPtpControlPanel
                         object v = k.GetValue("SystemStartOptions");
                         if (v is string &&
                             ((string)v).IndexOf("TESTSIGNING", StringComparison.OrdinalIgnoreCase) >= 0)
-                            testSigning = "ON";
+                            return "ON";
                     }
                 }
             }
             catch
             {
             }
-
-            bool blocked = (secureBoot == "ON") && (testSigning != "ON");
-
-            return "Secure Boot: " + secureBoot + "     test signing: " + testSigning +
-                (blocked ? "     -> cannot load the force-click driver as configured" : "") +
-                "\r\nThe force-click driver is self-signed: it loads only with Secure Boot OFF " +
-                "(our certificate is trusted in that case) or with test signing ON. With Secure Boot " +
-                "on, use the Microsoft-signed driver - force click stays unavailable.";
+            return "off";
         }
 
         private static int ReadDriverInt(string name, int def)
@@ -1191,17 +1248,11 @@ namespace AmtPtpControlPanel
                 int threshold = 0;
                 if (ctlForceClick != null && ctlForceClick.Checked)
                 {
-                    int parsed;
-                    if (int.TryParse(ctlForcePressure.Text, out parsed))
-                    {
-                        if (parsed < 1) parsed = 1;
-                        if (parsed > 255) parsed = 255;
-                        threshold = parsed;
-                    }
-                    else
-                    {
-                        threshold = 200;
-                    }
+                    // the slider can only produce 1-255, but the registry may have
+                    // been edited by hand - clamp anyway
+                    threshold = (ctlForcePressure != null) ? ctlForcePressure.Value : 200;
+                    if (threshold < 1) threshold = 1;
+                    if (threshold > 255) threshold = 255;
                 }
 
                 int action = 0;
@@ -1261,16 +1312,6 @@ namespace AmtPtpControlPanel
             RefreshRotationChecks();
         }
 
-        private void RefreshRotationChecks()
-        {
-            if (rotationItems == null)
-                return;
-
-            int current = ReadDriverInt("Rotation", 0);
-            foreach (System.Collections.Generic.KeyValuePair<int, ToolStripMenuItem> pair in rotationItems)
-                pair.Value.Checked = (pair.Key == current);
-        }
-
         private void ApplyRotation(int degrees)
         {
             try
@@ -1288,6 +1329,125 @@ namespace AmtPtpControlPanel
             }
 
             RefreshRotationChecks();
+        }
+
+        // Settings-window twin of the tray submenu: without it the rotation
+        // option was invisible to anyone who never opened the tray menu.
+        private void BuildRotationUi()
+        {
+            try
+            {
+                int gw = (ctlStartupGroupBox != null) ? ctlStartupGroupBox.Width : 600;
+                int gx = (ctlStartupGroupBox != null) ? ctlStartupGroupBox.Left : 13;
+                int gy = (uiStackBottom > 0)
+                        ? uiStackBottom + 8
+                        : ((ctlStartupGroupBox != null) ? ctlStartupGroupBox.Bottom + 8 + 156 + 8 : 966);
+
+                GroupBox g = new GroupBox();
+                g.Text = "Rotation  (needs the self-signed rotation driver build)";
+                g.Size = new System.Drawing.Size(gw, 104);
+                g.Location = new System.Drawing.Point(gx, gy);
+                g.TabIndex = 19;
+
+                Label lblRotation = new Label();
+                lblRotation.AutoSize = false;
+                lblRotation.Location = new System.Drawing.Point(16, 27);
+                lblRotation.Size = new System.Drawing.Size(120, 20);
+                lblRotation.Text = "Trackpad:";
+                g.Controls.Add(lblRotation);
+
+                int[] degrees = new int[] { 0, 90, 180, 270 };
+                string[] labels = new string[] { "0 degrees (default)", "90 degrees", "180 degrees", "-90 degrees" };
+
+                ctlRotationRadios = new RadioButton[degrees.Length];
+                int x = 110;
+                for (int i = 0; i < degrees.Length; i++)
+                {
+                    RadioButton rb = new RadioButton();
+                    rb.AutoSize = true;
+                    rb.Location = new System.Drawing.Point(x, 26);
+                    rb.Text = labels[i];
+                    int value = degrees[i];
+                    // Click (not CheckedChanged): RefreshRotationChecks sets
+                    // Checked itself and must not write the setting back
+                    rb.Click += (s, e) => ApplyRotation(value);
+                    g.Controls.Add(rb);
+                    ctlRotationRadios[i] = rb;
+                    x += TextRenderer.MeasureText(labels[i], this.Font).Width + 26;
+                }
+
+                ctlRotationStatus = new Label();
+                ctlRotationStatus.AutoSize = false;
+                ctlRotationStatus.Location = new System.Drawing.Point(16, 54);
+                ctlRotationStatus.Size = new System.Drawing.Size(gw - 32, 40);
+                ctlRotationStatus.Text = RotationStatusText();
+                g.Controls.Add(ctlRotationStatus);
+
+                this.Controls.Add(g);
+
+                int needed = g.Bottom + 14;
+                if (this.ClientSize.Height < needed)
+                    this.ClientSize = new System.Drawing.Size(this.ClientSize.Width, needed);
+
+                if (tipOptions != null)
+                {
+                    tipOptions.SetToolTip(g,
+                        "Turns the trackpad input in 90 degree steps (same setting as the tray menu's " +
+                        "Rotation submenu). The driver re-reads it when the device restarts, so the " +
+                        "trackpad blinks once after a change.");
+                    tipOptions.SetToolTip(ctlRotationStatus,
+                        "Rotation is implemented in the USB (UMDF) driver, so it needs the " +
+                        "self-signed driver built with rotation support; the Microsoft-signed " +
+                        "driver ignores the setting. The Bluetooth path has no rotation yet.");
+                }
+
+                RefreshRotationChecks();
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    string dir = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "MagicTrackpad");
+                    Directory.CreateDirectory(dir);
+                    File.AppendAllText(Path.Combine(dir, "rotation-ui.log"),
+                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + ex + "\r\n\r\n");
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        private static string RotationStatusText()
+        {
+            return "Written to the driver's Rotation parameter; the trackpad restarts once " +
+                "because the HID report descriptor is re-read only on device start.\r\n" +
+                SigningStatusLine() + "     Needs the self-signed rotation driver - the " +
+                "Microsoft-signed driver ignores it, and Bluetooth has no rotation yet.";
+        }
+
+        private void RefreshRotationChecks()
+        {
+            int current = ReadDriverInt("Rotation", 0);
+
+            if (rotationItems != null)
+            {
+                foreach (System.Collections.Generic.KeyValuePair<int, ToolStripMenuItem> pair in rotationItems)
+                    pair.Value.Checked = (pair.Key == current);
+            }
+
+            if (ctlRotationRadios != null)
+            {
+                int[] degrees = new int[] { 0, 90, 180, 270 };
+                for (int i = 0; i < ctlRotationRadios.Length && i < degrees.Length; i++)
+                {
+                    RadioButton rb = ctlRotationRadios[i];
+                    if (rb != null && !rb.IsDisposed)
+                        rb.Checked = (degrees[i] == current);
+                }
+            }
         }
 
         private void StartForceClickListener()
