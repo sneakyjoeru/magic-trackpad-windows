@@ -36,7 +36,7 @@ WHAT YOU GET
 INSTALL
 
     bcdedit /set testsigning on          (Secure Boot must be OFF, then reboot)
-    Install.cmd -SelfSigned
+    Install-SelfSigned.cmd               (double-click; = Install.cmd -SelfSigned)
 
   The installer trusts the certificate shipped in certs\, imports the package
   and binds the device. Back to the Microsoft-signed driver:

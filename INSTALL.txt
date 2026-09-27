@@ -47,6 +47,9 @@ WHAT IS IN THE ARCHIVE
 
   Install.cmd                  DOUBLE-CLICK THIS - asks for admin rights once and
                                runs install.ps1 (optional arguments are passed on)
+  Install-SelfSigned.cmd       the same one-click install for the driver built
+                               from source (rotation + force click); present in
+                               the "(self-signed)" archive only
   Uninstall.cmd                the reverse: panel, autostart, driver
   Uninstall-All-Apple-Drivers.cmd
                                clean slate: removes EVERY known Apple / Magic
@@ -96,7 +99,12 @@ OPTIONAL FEATURES (need the self-signed driver archive)
     are in the tray menu's "Rotation" submenu.
 
   Using them requires Windows test signing (bcdedit /set testsigning on + reboot,
-  Secure Boot off) and Install.cmd -SelfSigned from that archive. See
+  Secure Boot off). The self-signed archive has its own double-click entry point
+  that does all of that in one click - no switch to remember:
+
+      Install-SelfSigned.cmd
+
+  (the equivalent command line is Install.cmd -SelfSigned). See
   FORCE-CLICK.txt and ROTATION.txt in that archive. Everything else is identical;
   the Microsoft-signed package here ignores both settings.
 

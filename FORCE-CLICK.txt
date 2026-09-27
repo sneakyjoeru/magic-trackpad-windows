@@ -79,12 +79,11 @@ INSTALL
      then REBOOT. Secure Boot has to be off for that. Windows will show
      "Test Mode" on the desktop.
 
-  2. In this folder, run (double-click Install.cmd and pass the switch, or use
-     a command prompt):
-         Install.cmd -SelfSigned
-     It trusts certs\MtRootCA.cer, imports the self-signed driver from
-     driver-self-signed\ and starts the panel. The normal Microsoft-signed
-     package in driver\ stays untouched, so you can switch back at any time.
+  2. In this folder, double-click   Install-SelfSigned.cmd   (or, from a command
+     prompt, Install.cmd -SelfSigned). It trusts certs\MtRootCA.cer, imports the
+     self-signed driver from driver-self-signed\ and starts the panel. The normal
+     Microsoft-signed package in driver\ stays untouched, so you can switch back
+     at any time.
 
   3. Open the panel, tick "Simulate force click", pick the action and drag the
      pressure slider until a normal click no longer triggers the action.

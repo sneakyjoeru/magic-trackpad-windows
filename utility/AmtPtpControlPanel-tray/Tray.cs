@@ -119,6 +119,7 @@ namespace AmtPtpControlPanel
                 // read once right away
                 RefreshForceClickStatus();
                 RefreshRotationChecks();
+                RefreshRotationStatus();
                 StartBatteryPolling();
                 if ((System.DateTime.Now - lastUiRefresh)
                         .TotalMilliseconds > 1000)
@@ -928,6 +929,7 @@ namespace AmtPtpControlPanel
 
         private CheckBox ctlForceClick;
         private Label ctlForceStatus;
+        private Label ctlForceStatusNote;
         private ComboBox ctlForceAction;
         private TrackBar ctlForcePressure;
         private Label ctlForcePressureValue;
@@ -939,6 +941,7 @@ namespace AmtPtpControlPanel
         // Rotation group of the settings window (twin of the tray submenu).
         private RadioButton[] ctlRotationRadios;
         private Label ctlRotationStatus;
+        private Label ctlRotationStatusNote;
         // bottom edge of the last runtime-built group, so the next one stacks
         private int uiStackBottom = 0;
 
@@ -954,6 +957,43 @@ namespace AmtPtpControlPanel
             "Do nothing"
         };
 
+        // Layout helpers for the runtime-built groups.
+        //
+        // Every control is parented BEFORE its text is set, so AutoSize measures
+        // with the group's real (font-scaled) font, and every position comes
+        // from the previous sibling's actual geometry instead of an estimate.
+        // Estimates are what clipped the "no UAC prompt" line and painted over
+        // the first rotation radio button.
+        private static Label AddLabel(Control parent, string text)
+        {
+            Label l = new Label();
+            l.AutoSize = true;
+            parent.Controls.Add(l);
+            l.Text = text;
+            return l;
+        }
+
+        // AutoSize + a maximum width: the label wraps and grows downwards, so a
+        // long status text can never be cut off by a fixed height.
+        private static Label AddWrappedLabel(Control parent, string text, int maxWidth)
+        {
+            Label l = new Label();
+            l.AutoSize = true;
+            l.MaximumSize = new System.Drawing.Size(maxWidth, 0);
+            parent.Controls.Add(l);
+            l.Text = text;
+            return l;
+        }
+
+        private static CheckBox AddCheckBox(Control parent, string text)
+        {
+            CheckBox c = new CheckBox();
+            c.AutoSize = true;
+            parent.Controls.Add(c);
+            c.Text = text;
+            return c;
+        }
+
         private void BuildForceClickUi()
         {
             try
@@ -968,73 +1008,77 @@ namespace AmtPtpControlPanel
 
                 GroupBox g = new GroupBox();
                 g.Text = "Force click  (needs the force-click driver build)";
-                g.Size = new System.Drawing.Size(gw, 156);
+                g.Size = new System.Drawing.Size(gw, 200);   // fitted to the content below
                 g.Location = new System.Drawing.Point(gx, gy);
                 g.TabIndex = 18;
 
                 int inner = gw - 32;
+                const int left = 16;
+                int rowY = 22;
 
-                ctlForceClick = new CheckBox();
-                ctlForceClick.AutoSize = false;
-                ctlForceClick.Location = new System.Drawing.Point(16, 20);
-                ctlForceClick.Size = new System.Drawing.Size(inner, 22);
-                ctlForceClick.Text = "Simulate force click (press harder for a second click)";
-                g.Controls.Add(ctlForceClick);
+                ctlForceClick = AddCheckBox(g, "Simulate force click (press harder for a second click)");
+                ctlForceClick.Location = new System.Drawing.Point(left, rowY);
+                rowY = ctlForceClick.Bottom + 10;
 
-                Label lblAction = new Label();
-                lblAction.AutoSize = false;
-                lblAction.Location = new System.Drawing.Point(16, 52);
-                lblAction.Size = new System.Drawing.Size(140, 20);
-                lblAction.Text = "Action on force press:";
-                g.Controls.Add(lblAction);
+                Label lblAction = AddLabel(g, "Action on force press:");
+                lblAction.Location = new System.Drawing.Point(left, rowY + 3);
 
                 ctlForceAction = new ComboBox();
                 ctlForceAction.DropDownStyle = ComboBoxStyle.DropDownList;
-                ctlForceAction.Location = new System.Drawing.Point(158, 49);
-                ctlForceAction.Size = new System.Drawing.Size(200, 21);
+                g.Controls.Add(ctlForceAction);          // parent first: real font
                 ctlForceAction.Items.AddRange(ForceClickActions);
-                g.Controls.Add(ctlForceAction);
+                int actionW = 120;
+                foreach (string s in ForceClickActions)
+                    actionW = Math.Max(actionW, TextRenderer.MeasureText(s, ctlForceAction.Font).Width);
+                ctlForceAction.Size = new System.Drawing.Size(actionW + 34, ctlForceAction.PreferredHeight);
+                ctlForceAction.Location = new System.Drawing.Point(lblAction.Right + 10, rowY);
+                rowY = Math.Max(lblAction.Bottom, ctlForceAction.Bottom) + 12;
 
                 // Pressure threshold is a slider with the raw value next to it:
                 // the value only matters relative to a firm press, and a slider
                 // shows where the current setting sits in the 1-255 range.
-                Label lblPressure = new Label();
-                lblPressure.AutoSize = false;
-                lblPressure.Location = new System.Drawing.Point(16, 83);
-                lblPressure.Size = new System.Drawing.Size(150, 20);
-                lblPressure.Text = "Pressure threshold:";
-                g.Controls.Add(lblPressure);
+                Label lblPressure = AddLabel(g, "Pressure threshold:");
+                lblPressure.Location = new System.Drawing.Point(left, rowY + 8);
 
                 ctlForcePressure = new TrackBar();
                 ctlForcePressure.AutoSize = false;
-                ctlForcePressure.Location = new System.Drawing.Point(170, 74);
-                ctlForcePressure.Size = new System.Drawing.Size(240, 32);
                 ctlForcePressure.Minimum = 1;
                 ctlForcePressure.Maximum = 255;
                 ctlForcePressure.TickFrequency = 32;
                 ctlForcePressure.SmallChange = 5;
                 ctlForcePressure.LargeChange = 25;
                 ctlForcePressure.Value = 200;
-                g.Controls.Add(ctlForcePressure);
+                g.Controls.Add(ctlForcePressure);         // parent first: real font
+                int sliderW = inner - lblPressure.Width - 110;
+                if (sliderW < 150) sliderW = 150;
+                if (sliderW > 320) sliderW = 320;
+                ctlForcePressure.Size = new System.Drawing.Size(sliderW, 32);
+                ctlForcePressure.Location = new System.Drawing.Point(lblPressure.Right + 10, rowY + 1);
 
                 ctlForcePressureValue = new Label();
-                ctlForcePressureValue.AutoSize = false;
-                ctlForcePressureValue.Location = new System.Drawing.Point(418, 83);
-                ctlForcePressureValue.Size = new System.Drawing.Size(60, 20);
-                ctlForcePressureValue.Text = "200";
-                ctlForcePressureValue.TextAlign = ContentAlignment.MiddleLeft;
+                ctlForcePressureValue.AutoSize = true;
                 g.Controls.Add(ctlForcePressureValue);
+                ctlForcePressureValue.Text = "200";
+                ctlForcePressureValue.Location =
+                    new System.Drawing.Point(ctlForcePressure.Right + 10, rowY + 8);
+                rowY = Math.Max(ctlForcePressure.Bottom, ctlForcePressureValue.Bottom) + 12;
 
                 // Which firmware/signing state is this machine in? It decides
                 // whether the self-signed force-click driver can load at all.
-                ctlForceStatus = new Label();
-                ctlForceStatus.AutoSize = false;
-                ctlForceStatus.Location = new System.Drawing.Point(16, 112);
-                ctlForceStatus.Size = new System.Drawing.Size(inner, 36);
-                ctlForceStatus.Text = ForceClickStatusText();
-                g.Controls.Add(ctlForceStatus);
+                // Two labels: the state line can be highlighted, the note cannot
+                // be mixed into it (a Label carries one colour for the whole text).
+                // The text is set here, not after the layout, because the note
+                // and the group height are derived from this label's height.
+                ctlForceStatus = AddWrappedLabel(g, SigningStateText(), inner);
+                StyleSigningLabel(ctlForceStatus);
+                ctlForceStatus.Location = new System.Drawing.Point(left, rowY);
+                ctlForceStatusNote = AddWrappedLabel(g, ForceClickNoteText(), inner);
+                ctlForceStatusNote.Location = new System.Drawing.Point(left, ctlForceStatus.Bottom + 2);
 
                 this.Controls.Add(g);
+
+                // fit the group to whatever the (font-scaled) content needs
+                g.Height = ctlForceStatusNote.Bottom + 12;
                 uiStackBottom = g.Bottom;
 
                 // make room for the group
@@ -1055,6 +1099,8 @@ namespace AmtPtpControlPanel
                 ctlForcePressure.Value = initialPressure;
                 ctlForcePressureValue.Text = initialPressure.ToString();
                 ctlForceClick.Checked = forceClickPressure > 0;
+
+                RefreshForceClickStatus();
 
                 // Dragging a slider fires ValueChanged for every step; writing the
                 // registry and asking the driver to re-read on each of them is
@@ -1133,31 +1179,78 @@ namespace AmtPtpControlPanel
             try
             {
                 if (ctlForceStatus != null && !ctlForceStatus.IsDisposed)
-                    ctlForceStatus.Text = ForceClickStatusText();
+                {
+                    ctlForceStatus.Text = SigningStateText();
+                    StyleSigningLabel(ctlForceStatus);
+                }
             }
             catch
             {
             }
         }
 
-        // "Secure Boot: OFF | test signing: OFF" plus the reason it matters.
-        private static string ForceClickStatusText()
+        private void RefreshRotationStatus()
         {
-            string secureBoot = SecureBootState();
-            string testSigning = TestSigningState();
-
-            bool blocked = (secureBoot == "ON") && (testSigning != "ON");
-
-            return "Secure Boot: " + secureBoot + "     test signing: " + testSigning +
-                (blocked ? "     -> cannot load the force-click driver as configured" : "") +
-                "\r\nThe force-click driver is self-signed: it loads only with Secure Boot OFF " +
-                "(our certificate is trusted in that case) or with test signing ON. With Secure Boot " +
-                "on, use the Microsoft-signed driver - force click stays unavailable.";
+            try
+            {
+                if (ctlRotationStatus != null && !ctlRotationStatus.IsDisposed)
+                {
+                    ctlRotationStatus.Text = SigningStateText();
+                    StyleSigningLabel(ctlRotationStatus);
+                }
+            }
+            catch
+            {
+            }
         }
 
-        private static string SigningStatusLine()
+        // The one line that decides whether ANY self-signed driver can load on
+        // this machine. A configuration that blocks them is drawn red and bold.
+        private static string SigningStateText()
         {
-            return "Secure Boot: " + SecureBootState() + "     test signing: " + TestSigningState();
+            return "Secure Boot: " + SecureBootState() + "     test signing: " + TestSigningState() +
+                (SigningBlocked() ? "     -> this blocks the self-signed driver" : "");
+        }
+
+        // Self-signed drivers load with Secure Boot off (our certificate is
+        // trusted then) or with test signing on. Secure Boot on blocks them.
+        private static bool SigningBlocked()
+        {
+            return SecureBootState() == "ON";
+        }
+
+        private static void StyleSigningLabel(Label l)
+        {
+            bool blocked = SigningBlocked();
+            bool bold = (l.Font.Style & FontStyle.Bold) != 0;
+
+            if (blocked)
+            {
+                l.ForeColor = Color.Red;
+                if (!bold)
+                    l.Font = new Font(l.Font, FontStyle.Bold);
+            }
+            else
+            {
+                l.ForeColor = SystemColors.ControlText;
+                if (bold)
+                    l.Font = new Font(l.Font, FontStyle.Regular);
+            }
+        }
+
+        private static string ForceClickNoteText()
+        {
+            return "The force-click driver is self-signed: it loads with Secure Boot OFF " +
+                "(our certificate is trusted in that case) or with test signing ON. With Secure " +
+                "Boot on, use the Microsoft-signed driver - force click stays unavailable.";
+        }
+
+        private static string RotationNoteText()
+        {
+            return "Written to the driver's Rotation parameter; the trackpad restarts once " +
+                "because the HID report descriptor is re-read only on device start. Needs the " +
+                "self-signed rotation driver - the Microsoft-signed driver ignores it, and " +
+                "Bluetooth has no rotation yet.";
         }
 
         private static string SecureBootState()
@@ -1344,46 +1437,64 @@ namespace AmtPtpControlPanel
                         : ((ctlStartupGroupBox != null) ? ctlStartupGroupBox.Bottom + 8 + 156 + 8 : 966);
 
                 GroupBox g = new GroupBox();
-                g.Text = "Rotation  (needs the self-signed rotation driver build)";
-                g.Size = new System.Drawing.Size(gw, 104);
+                g.Text = "Rotation  (trackpad, needs the self-signed rotation driver build)";
+                g.Size = new System.Drawing.Size(gw, 200);   // fitted to the content below
                 g.Location = new System.Drawing.Point(gx, gy);
                 g.TabIndex = 19;
 
-                Label lblRotation = new Label();
-                lblRotation.AutoSize = false;
-                lblRotation.Location = new System.Drawing.Point(16, 27);
-                lblRotation.Size = new System.Drawing.Size(120, 20);
-                lblRotation.Text = "Trackpad:";
-                g.Controls.Add(lblRotation);
+                int inner = gw - 32;
+                const int left = 16;
 
                 int[] degrees = new int[] { 0, 90, 180, 270 };
                 string[] labels = new string[] { "0 degrees (default)", "90 degrees", "180 degrees", "-90 degrees" };
 
                 ctlRotationRadios = new RadioButton[degrees.Length];
-                int x = 110;
+                // Sequential placement from each radio's actual AutoSize width:
+                // no separate "Trackpad:" label (it overlapped the first radio and
+                // erased its circle), and wrap to a second row if the row of four
+                // ever gets wider than the group.
+                int x = left;
+                int y = 24;
+                int rowH = 0;
                 for (int i = 0; i < degrees.Length; i++)
                 {
                     RadioButton rb = new RadioButton();
                     rb.AutoSize = true;
-                    rb.Location = new System.Drawing.Point(x, 26);
+                    g.Controls.Add(rb);              // parent first: real font
                     rb.Text = labels[i];
+
+                    if (x > left && (x + rb.Width) > inner)
+                    {
+                        x = left;
+                        y += rowH + 6;
+                        rowH = 0;
+                    }
+
+                    rb.Location = new System.Drawing.Point(x, y);
+                    if (rb.Height > rowH)
+                        rowH = rb.Height;
+                    x = rb.Right + 20;
+
                     int value = degrees[i];
                     // Click (not CheckedChanged): RefreshRotationChecks sets
                     // Checked itself and must not write the setting back
                     rb.Click += (s, e) => ApplyRotation(value);
-                    g.Controls.Add(rb);
                     ctlRotationRadios[i] = rb;
-                    x += TextRenderer.MeasureText(labels[i], this.Font).Width + 26;
                 }
 
-                ctlRotationStatus = new Label();
-                ctlRotationStatus.AutoSize = false;
-                ctlRotationStatus.Location = new System.Drawing.Point(16, 54);
-                ctlRotationStatus.Size = new System.Drawing.Size(gw - 32, 40);
-                ctlRotationStatus.Text = RotationStatusText();
-                g.Controls.Add(ctlRotationStatus);
+                int statusY = y + rowH + 12;
+
+                // state line (red + bold when this machine blocks self-signed
+                // drivers) and the explanation, as two separate labels
+                ctlRotationStatus = AddWrappedLabel(g, SigningStateText(), inner);
+                StyleSigningLabel(ctlRotationStatus);
+                ctlRotationStatus.Location = new System.Drawing.Point(left, statusY);
+                ctlRotationStatusNote = AddWrappedLabel(g, RotationNoteText(), inner);
+                ctlRotationStatusNote.Location = new System.Drawing.Point(left, ctlRotationStatus.Bottom + 2);
 
                 this.Controls.Add(g);
+
+                g.Height = ctlRotationStatusNote.Bottom + 12;
 
                 int needed = g.Bottom + 14;
                 if (this.ClientSize.Height < needed)
@@ -1402,6 +1513,7 @@ namespace AmtPtpControlPanel
                 }
 
                 RefreshRotationChecks();
+                RefreshRotationStatus();
             }
             catch (Exception ex)
             {
@@ -1418,14 +1530,6 @@ namespace AmtPtpControlPanel
                 {
                 }
             }
-        }
-
-        private static string RotationStatusText()
-        {
-            return "Written to the driver's Rotation parameter; the trackpad restarts once " +
-                "because the HID report descriptor is re-read only on device start.\r\n" +
-                SigningStatusLine() + "     Needs the self-signed rotation driver - the " +
-                "Microsoft-signed driver ignores it, and Bluetooth has no rotation yet.";
         }
 
         private void RefreshRotationChecks()

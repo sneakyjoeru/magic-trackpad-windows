@@ -34,6 +34,11 @@ WinForms control panel (`driver/AmtPtpControlPanel`) and extended with:
   driver value). Writes the driver's `Rotation` value and restarts the trackpad once so the
   driver re-reads its report descriptor. Needs a driver built with rotation support; with the
   Microsoft-signed driver the setting is inert.
+- **Warning line, red and bold** — both self-signed groups print
+  `Secure Boot: …     test signing: …` and that line turns **red + bold** when Secure Boot is
+  on, i.e. when Windows will refuse to load any self-signed driver; the note under it says what
+  to do instead. Every runtime‑built control is auto‑sized, wraps, and is placed from its
+  siblings' real geometry, so nothing is clipped or painted over at any font size or DPI.
 
 Settings persist to the same vendor registry location the original panel uses
 (`HKLM\...\WUDF\Services\AmtPtpDeviceUsbUm\Parameters`), so both panels control the

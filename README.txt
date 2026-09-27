@@ -72,6 +72,10 @@ INSTALL
 
   See INSTALL.txt for switches, manual steps and troubleshooting.
 
+  For the self-signed build (rotation + force click) double-click
+  Install-SelfSigned.cmd instead - the same one-prompt flow, installing
+  driver-self-signed\ and trusting the certificates, with no switch to type.
+
 USE
   Right-click the tray icon:
     Open               - the full settings panel (click feedback, silent

@@ -45,7 +45,11 @@ WHAT THIS IS
     value shown next to it. The slider writes once you stop dragging. Needs the
     force-click driver build; the Microsoft-signed driver has no pressure
     interface and ignores it. Both groups report Secure Boot / test signing
-    state, because that decides whether the self-signed driver can load at all.
+    state, because that decides whether the self-signed driver can load at all -
+    when Secure Boot blocks it, that line is drawn in red bold text.
+
+  * Every text in the window is auto-sized and wraps: labels can no longer be
+    cut off, and no control is drawn over another one.
 
 REQUIREMENTS
   * Windows 10/11 x64

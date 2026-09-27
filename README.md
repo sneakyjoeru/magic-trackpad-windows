@@ -40,6 +40,10 @@ If test signing was ever switched on for a self-signed build, turn it back off w
 Details, switches, manual steps, verification and troubleshooting:
 **[SETUP-NEW-HOST.md](SETUP-NEW-HOST.md)** and **[INSTALL.txt](INSTALL.txt)**.
 
+For the optional self-signed driver (trackpad rotation + force click) the *"(self-signed)"*
+archive ships its own double-click entry point, **`Install-SelfSigned.cmd`** — same one-prompt
+flow, no `-SelfSigned` switch to type.
+
 Requirements: Windows 10/11 x64, an account in the local **Administrators** group (the panel
 opens the driver's control device with an elevated token). No compiler needed — .NET 4.x ships
 with Windows.
