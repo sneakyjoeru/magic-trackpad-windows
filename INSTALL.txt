@@ -1,4 +1,4 @@
-Apple Magic Trackpad Setup Utility + Drivers v1.1
+Apple Magic Trackpad Setup Utility + Drivers v1.2
 =================================================
 
 This archive contains EVERYTHING needed on a fresh Windows host: the
@@ -88,7 +88,7 @@ OPTIONAL FEATURES (need the self-signed driver archive)
   contact remapping) exist only inside it - and a modified driver cannot keep
   Microsoft's signature. They ship in one separate archive:
 
-      Apple Magic Trackpad Setup Utility + Drivers v1.1 (self-signed)
+      Apple Magic Trackpad Setup Utility + Drivers v1.2 (self-signed)
 
   * FORCE CLICK - a firm press acts as a second click (right button by default).
     In the settings window: the "Force click" group, with the action and a

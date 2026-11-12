@@ -1,7 +1,7 @@
 Force click - optional self-signed driver variant
 =================================================
 
-This archive is the normal "Apple Magic Trackpad Setup Utility + Drivers v1.1"
+This archive is the normal "Apple Magic Trackpad Setup Utility + Drivers v1.2"
 package plus a driver that can turn a FIRM PRESS on the trackpad into a second
 click. The Microsoft-signed driver cannot do this: the pressure value only
 exists inside the driver, and a modified driver cannot carry Microsoft's

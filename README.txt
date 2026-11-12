@@ -1,4 +1,4 @@
-Apple Magic Trackpad Setup Utility + Drivers v1.1
+Apple Magic Trackpad Setup Utility + Drivers v1.2
 =================================================
 
 WHAT THIS IS

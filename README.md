@@ -21,7 +21,7 @@ with the additions this repo needs in practice:
 
 ## Install
 
-1. Download **Apple Magic Trackpad Setup Utility + Drivers v1.1** from
+1. Download **Apple Magic Trackpad Setup Utility + Drivers v1.2** from
    [Releases](../../releases/latest) and extract it.
 2. Double‑click **`Install.cmd`** and confirm the UAC prompt.
 

@@ -1,4 +1,4 @@
-AmtPtpControlPanel - tray control panel for the Magic Trackpad (v1.1 package)
+AmtPtpControlPanel - tray control panel for the Magic Trackpad (v1.2 package)
 ============================================================================
 
 WHAT THIS IS

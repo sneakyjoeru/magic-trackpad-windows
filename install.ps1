@@ -1,5 +1,5 @@
 <#
-    Apple Magic Trackpad Setup Utility + Drivers v1.1 - installer
+    Apple Magic Trackpad Setup Utility + Drivers v1.2 - installer
     ============================================================
 
     (Driver + panel from vitoplantamura/MagicTrackpad2ForWindows and
@@ -173,7 +173,7 @@ function Install-Driver {
 
     if ($want -eq 'microsoft') {
         if ($have) {
-            Write-Step 'Microsoft-signed package already installed - re-binding'
+            Write-Step 'a Microsoft-signed package is already installed - importing this archive''s copy so a newer driver replaces it'
         } else {
             Write-Step 'importing the Microsoft-signed driver package'
             if ($existing.Count -gt 0) {
@@ -184,22 +184,18 @@ function Install-Driver {
         Write-Step "a self-signed package is already installed ($($existing -join ', ')) - importing this archive's copy so a newer build replaces it"
     }
 
-    # Self-signed archives are re-imported even when a self-signed package is
-    # already present: the driver store keeps whichever DriverVer is higher, so an
-    # upgrade (for example a rotation-capable build over an older one) only lands
-    # because of this. pnputil ignores a byte-identical package.
-    $refreshSelfSigned = ($want -eq 'self-signed' -and $have)
-    if (-not $have -or $refreshSelfSigned) {
-        Write-Step "importing driver package ($inf)"
-        $out = & pnputil.exe /add-driver "$inf" /install 2>&1
-        $out | ForEach-Object { Write-Host "    $_" }
-        if ($LASTEXITCODE -ne 0 -and ($out -notmatch 'already')) {
-            throw "pnputil /add-driver failed (exit $LASTEXITCODE)"
-        }
-        Write-Ok 'driver package imported'
-    } else {
-        Write-Ok ("installed package kind: " + ($installedKinds -join ', '))
+    # The package is always imported, even when one of the same kind is already
+    # present: the driver store keeps whichever DriverVer is higher, so an upgrade
+    # (a newer Microsoft-signed upstream driver, or a rotation-capable build over
+    # an older self-signed one) only lands because of this. pnputil ignores a
+    # byte-identical package.
+    Write-Step "importing driver package ($inf)"
+    $out = & pnputil.exe /add-driver "$inf" /install 2>&1
+    $out | ForEach-Object { Write-Host "    $_" }
+    if ($LASTEXITCODE -ne 0 -and ($out -notmatch 'already')) {
+        throw "pnputil /add-driver failed (exit $LASTEXITCODE)"
     }
+    Write-Ok ("driver package imported (installed before: " + ($installedKinds -join ', ') + ")")
 
     # The upstream driver defaults IgnoreButtonFinger to 1, which locks the
     # pointer to the press point while the button is held ("clicking stops the
@@ -553,7 +549,7 @@ function Uninstall-All {
 # ------------------------------- main -------------------------------
 
 Write-Host ''
-Write-Host 'Apple Magic Trackpad Setup Utility + Drivers v1.1' -ForegroundColor White
+Write-Host 'Apple Magic Trackpad Setup Utility + Drivers v1.2' -ForegroundColor White
 Write-Host "  archive : $root"
 Write-Host ''
 

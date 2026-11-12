@@ -1,7 +1,7 @@
 Rotation - optional self-signed driver variant
 ==============================================
 
-This archive is the normal "Apple Magic Trackpad Setup Utility + Drivers v1.1"
+This archive is the normal "Apple Magic Trackpad Setup Utility + Drivers v1.2"
 package plus a driver built from source that can rotate the trackpad input.
 Rotation happens inside the driver (it remaps every contact and swaps the X/Y
 axes of the Magic Trackpad 2 HID report descriptor for 90/270), so a driver
@@ -52,5 +52,10 @@ NOTES
   * Rotation is implemented in the USB (UMDF) driver. The Bluetooth path is
     handled by the native HID stack with AmtPtpHidFilter as a passthrough
     filter, so the setting has no effect there yet.
+  * 180 degrees only, without test signing: the Microsoft-signed driver
+    (v2.3, in driver\) has its own InvertMovement setting. Set the DWORD
+    InvertMovement = 1 in both Parameters keys above, then unplug/replug or
+    re-pair the trackpad. It works over USB and Bluetooth. With this
+    self-signed driver InvertMovement adds 180 degrees to Rotation.
   * This archive also contains the force-click driver variant (see
     FORCE-CLICK.txt) - both features live in the same build.
