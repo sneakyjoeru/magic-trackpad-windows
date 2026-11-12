@@ -37,6 +37,7 @@
     <ClCompile Include="Hid.c" />
     <ClCompile Include="InputInterrupt.c" />
     <ClCompile Include="Queue.c" />
+    <ClCompile Include="ControlPanel.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\AppleDefinition.h" />
@@ -52,9 +53,9 @@
     <ClInclude Include="include\HidCommon.h" />
     <ClInclude Include="include\ModernTrace.h" />
     <ClInclude Include="include\Queue.h" />
-    <ClInclude Include="include\resource.h" />
     <ClInclude Include="include\StaticHidRegistry.h" />
     <ClInclude Include="include\Trace.h" />
+    <ClInclude Include="include\ControlPanel.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -235,9 +236,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <FilesToPackage Include="$(TargetPath)" />
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="Resource.rc" />
   </ItemGroup>
   <ItemGroup>
     <None Include="AmtPtpDevice.wprp" />

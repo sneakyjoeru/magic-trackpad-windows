@@ -11,6 +11,10 @@ DEFINE_GUID(GUID_DEVICEINTERFACE_AmtPtpHidFilter,
 // Definition
 #define HID_XFER_PACKET_SIZE 32
 
+// How long to wait for the pad to acknowledge a SET_FEATURE. On a new Bluetooth connection
+// the first acknowledgement has been seen to take about 5 s, and sometimes it never comes.
+#define PTP_FEATURE_REPORT_TIMEOUT_SEC 8
+
 #define HID_VID_APPLE_USB 0x05ac
 #define HID_VID_APPLE_BT  0x004c
 #define HID_PID_MAGIC_TRACKPAD_2 0x0265
@@ -30,12 +34,28 @@ typedef struct _PTP_REPORT_AUX {
 	UCHAR		TipSwitch;
 } PTP_REPORT_AUX, * PPTP_REPORT_AUX;
 
+// Only one battery sample (including its property write) can be in flight.
+typedef struct _BATTERY_CONTEXT {
+    WDFIOTARGET Target;
+    WDFTIMER Timer;
+    volatile LONG Epoch; // odd while running, even while stopped
+    volatile LONG Busy;
+    LONG SampleEpoch;
+    volatile LONG64 Cached;
+    LONG64 Published;
+    HID_XFER_PACKET Packet;
+    UCHAR Report[64];
+    PIO_WORKITEM Work;
+    PDEVICE_OBJECT Pdo;
+} BATTERY_CONTEXT;
+
 // Device Context
 typedef struct _DEVICE_CONTEXT
 {
     PDEVICE_OBJECT  WdmDeviceObject;
     WDFDEVICE       Device;
     WDFQUEUE        HidReadQueue;
+    BATTERY_CONTEXT Battery;
 
     // Device identification
     USHORT VendorID;
@@ -52,8 +72,17 @@ typedef struct _DEVICE_CONTEXT
     BOOLEAN     IsHidIoDetourCompleted;
     WDFTIMER    HidTransportRecoveryTimer;
     WDFWORKITEM HidTransportRecoveryWorkItem;
+    // IOCTL_HID_READ_REPORT requests in flight to the HID transport. Incremented
+    // right before WdfRequestSend, decremented when the send fails or the request
+    // completes. Never reset: in-flight reads survive D0 transitions and decrement
+    // on completion.
+    volatile LONG OutstandingTransportReads;
+    // Set while PtpFilterRecoveryTimerCallback is configuring the device.
+    volatile LONG ConfigurationInProgress;
 
-    // Device State
+    // Device State. TRUE while transport reads may be issued. Set when self-managed I/O starts
+    // or restarts, before the multitouch configuration has run; cleared on D0 exit and on a
+    // transport failure until the recovery timer has reconfigured the device.
     BOOLEAN DeviceConfigured;
 
     // PTP report specific
@@ -91,6 +120,7 @@ EVT_WDF_DEVICE_D0_ENTRY PtpFilterDeviceD0Entry;
 EVT_WDF_DEVICE_D0_EXIT PtpFilterDeviceD0Exit;
 EVT_WDF_DEVICE_SELF_MANAGED_IO_INIT PtpFilterSelfManagedIoInit;
 EVT_WDF_DEVICE_SELF_MANAGED_IO_RESTART PtpFilterSelfManagedIoRestart;
+EVT_WDF_DEVICE_SELF_MANAGED_IO_CLEANUP PtpFilterSelfManagedIoCleanup;
 
 // Device Management routines
 NTSTATUS
@@ -111,11 +141,29 @@ PtpFilterSetHapticFeedback(
 );
 
 NTSTATUS
-PtpFilterGetHidInputReport(
+PtpFilterActuate(
+    _In_ WDFDEVICE Device,
+    _In_ ULONG Feedback
+);
+
+NTSTATUS
+PtpFilterSendHidFeatureReport(
     _In_ WDFDEVICE Device,
     _In_ UCHAR ReportId,
-    _Out_ PUCHAR pReportBuffer,
-    _In_ ULONG ReportBufferSize
+    _In_ PUCHAR pReportData,
+    _In_ ULONG ReportDataSize
 );
+
+NTSTATUS
+PtpFilterSendHidOutputReport(
+    _In_ WDFDEVICE Device,
+    _In_ UCHAR ReportId,
+    _In_ PUCHAR pReportData,
+    _In_ ULONG ReportDataSize
+);
+
+VOID PtpBatteryInitialize(WDFDEVICE Device);
+VOID PtpBatteryStart(WDFDEVICE Device);
+EVT_WDF_DEVICE_SELF_MANAGED_IO_SUSPEND PtpBatterySuspend;
 
 EXTERN_C_END

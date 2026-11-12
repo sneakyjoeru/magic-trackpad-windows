@@ -254,6 +254,10 @@ AmtPtpServiceTouchInputInterrupt(
 	USHORT x = 0, y = 0;
 
 	Status = STATUS_SUCCESS;
+
+	// Clear the whole report so the contact slots beyond ContactCount, and
+	// ContactCount itself when surface reporting is off, do not carry stack data.
+	RtlZeroMemory(&PtpReport, sizeof(PtpReport));
 	PtpReport.ReportID = REPORTID_MULTITOUCH;
 	PtpReport.IsButtonClicked = 0;
 
@@ -441,6 +445,50 @@ AmtPtpRotateContact(
 	}
 }
 
+// Axis-aligned bounding box (PTP Width/Height, in X/Y logical units) of the Apple touch
+// ellipse. TouchMajor/TouchMinor are the ellipse axes; << 2 maps them to X/Y units as Linux
+// hid-magicmouse does. Orientation is 3-bit: 4 = major axis along Y, one step = 22.5 deg
+// (measured on an MT2). The box is symmetric in the rotation sign, so only |k| matters.
+static ULONG
+AmtPtpIsqrt(
+	_In_ ULONG v
+)
+{
+	ULONG r = 0, bit = 1UL << 30;
+	while (bit > v) bit >>= 2;
+	while (bit) {
+		if (v >= r + bit) { v -= r + bit; r = (r >> 1) + bit; }
+		else r >>= 1;
+		bit >>= 2;
+	}
+	return r;
+}
+
+static VOID
+AmtPtpMt2ContactBox(
+	_In_ UCHAR TouchMajor,
+	_In_ UCHAR TouchMinor,
+	_In_ UCHAR Orientation,
+	_Out_ USHORT* Width,
+	_Out_ USHORT* Height
+)
+{
+	// cos and sin of k * 22.5 degrees, scaled by 1024, for k = 0..4
+	static const USHORT cosK[5] = { 1024, 946, 724, 392, 0 };
+	static const USHORT sinK[5] = { 0, 392, 724, 946, 1024 };
+	INT k = (INT)(Orientation & 7) - 4;
+	ULONG a = (ULONG)(TouchMajor ? TouchMajor : 1) << 2;
+	ULONG b = (ULONG)(TouchMinor ? TouchMinor : 1) << 2;
+	ULONG ac, as, bc, bs, w, h;
+	if (k < 0) k = -k;
+	ac = (a * cosK[k] + 512) >> 10; as = (a * sinK[k] + 512) >> 10;
+	bc = (b * cosK[k] + 512) >> 10; bs = (b * sinK[k] + 512) >> 10;
+	w = AmtPtpIsqrt(as * as + bc * bc);  // X extent: major axis tilted away from Y
+	h = AmtPtpIsqrt(ac * ac + bs * bs);  // Y extent
+	*Width = (USHORT)(w ? w : 1);        // never zero while touching (spec)
+	*Height = (USHORT)(h ? h : 1);
+}
+
 _IRQL_requires_(PASSIVE_LEVEL)
 NTSTATUS
 AmtPtpServiceTouchInputInterruptType5(
@@ -453,7 +501,7 @@ AmtPtpServiceTouchInputInterruptType5(
 	NTSTATUS   Status;
 	WDFREQUEST Request;
 	WDFMEMORY  RequestMemory;
-	PTP_REPORT PtpReport;
+	PTP_REPORT_MT2 PtpReport;
 
 	const struct TRACKPAD_FINGER_TYPE5* f;
 	const struct TRACKPAD_REPORT_TYPE5* mt_report;
@@ -466,6 +514,10 @@ AmtPtpServiceTouchInputInterruptType5(
 	);
 
 	Status = STATUS_SUCCESS;
+
+	// Clear the whole report so the contact slots beyond ContactCount, and
+	// ContactCount itself when surface reporting is off, do not carry stack data.
+	RtlZeroMemory(&PtpReport, sizeof(PtpReport));
 	PtpReport.ReportID = REPORTID_MULTITOUCH;
 	PtpReport.IsButtonClicked = 0;
 
@@ -516,7 +568,7 @@ AmtPtpServiceTouchInputInterruptType5(
 		DeviceContext->PrevPtpReportAux1.Id = (UINT32)-1;
 		DeviceContext->PrevPtpReportAux2.Id = (UINT32)-1;
 		DeviceContext->ButtonDisabled = ReadSettingValue(L"ButtonDisabled", 0) ? TRUE : FALSE;
-		DeviceContext->StopPressure = ReadSettingValue(L"StopPressure", 0);
+		DeviceContext->StopPressure = ReadSettingValue(L"StopPressure", 0xffffffff);
 		DeviceContext->StopSize = ReadSettingValue(L"StopSize", 0xffffffff);
 		// Default: 0 (off) so that holding the button and moving the same
 		// finger performs a drag (the pointer follows the finger). With 1
@@ -536,6 +588,13 @@ AmtPtpServiceTouchInputInterruptType5(
 		// descriptor has to be swapped for 90/270 before the host asks for it),
 		// so both reads must agree.
 		DeviceContext->Rotation = ReadSettingValue(L"Rotation", 0);
+		// Upstream's InvertMovement (mirror X and Y for upside-down use) is a
+		// 180 degree rotation, so it is folded into Rotation: the rotation code
+		// then handles every combination with the right spans. Adding 180 keeps
+		// the 90/270 parity, so the report descriptor read in Hid.c still agrees.
+		DeviceContext->InvertMovement = ReadSettingValue(L"InvertMovement", 0) ? TRUE : FALSE;
+		if (DeviceContext->InvertMovement)
+			DeviceContext->Rotation = (DeviceContext->Rotation + 180) % 360;
 	}
 
 	if (DeviceContext->ButtonDisabled)
@@ -544,6 +603,32 @@ AmtPtpServiceTouchInputInterruptType5(
 	// Type 5 finger report
 	if (DeviceContext->IsSurfaceReportOn) {
 		raw_n = (NumBytesTransferred - sizeof(struct TRACKPAD_REPORT_TYPE5)) / sizeof(struct TRACKPAD_FINGER_TYPE5);
+
+		// Release pointer-lock state for slots that are not in this frame. A locked slot
+		// (Id with the MSB set) is normally released by a later frame that still carries
+		// the slot with TipSwitch clear. If the contact simply disappears (Bluetooth packet
+		// loss, or the pad dropping the slot) the entry would stay locked forever and the
+		// next finger reusing that slot id would be reported at the stale X/Y until lifted.
+		// A frame with no contacts therefore releases both entries.
+		{
+			USHORT presentSlots = 0;
+			size_t k;
+
+			for (k = 0; k < raw_n; k++) {
+				presentSlots |= (USHORT)(1u << mt_report->Fingers[k].Id);
+			}
+
+			for (k = 0; k < 2; k++) {
+				PPTP_REPORT_AUX aux = !k ? &DeviceContext->PrevPtpReportAux1 : &DeviceContext->PrevPtpReportAux2;
+
+				if (aux->Id != (UINT32)-1 && (presentSlots & (USHORT)(1u << (aux->Id & 0xF))) == 0) {
+					TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_INPUT, "%!FUNC! Slot %lu absent from frame, releasing pointer-lock entry (Id 0x%08lx)", (ULONG)(aux->Id & 0xF), (ULONG)aux->Id);
+					aux->Id = (UINT32)-1;
+					aux->TipSwitch = 0;
+				}
+			}
+		}
+
 		if (raw_n >= PTP_MAX_CONTACT_POINTS) raw_n = PTP_MAX_CONTACT_POINTS;
 		PtpReport.ContactCount = (UCHAR)raw_n;
 		forceClickMax = 0;   // recomputed for every report
@@ -570,7 +655,8 @@ AmtPtpServiceTouchInputInterruptType5(
 
 			// Apply the configured trackpad rotation before anything else uses
 			// x/y (contact slot bookkeeping included, so the locked button
-			// position is stored rotated as well).
+			// position is stored rotated as well). Upstream's InvertMovement is
+			// folded into Rotation as +180 when the settings are read.
 			AmtPtpRotateContact(DeviceContext, &x, &y);
 
 			PtpReport.Contacts[i].ContactID = f->Id;
@@ -579,7 +665,7 @@ AmtPtpServiceTouchInputInterruptType5(
 			// 0x4 = Contact/Valid
 			// I've gotten 0x6 if I press on the trackpad and then keep my finger close
 			// Note: These values come from my MBP9,2. These also are valid on my MT2
-			PtpReport.Contacts[i].TipSwitch = (f->State & 0x4) && (DeviceContext->IgnoreNearFingers == FALSE ? TRUE : !(f->State & 0x2));
+			PtpReport.Contacts[i].TipSwitch = DeviceContext->IgnoreNearFingers == FALSE ? (f->State & 0x4) != 0 : (f->State >= 3 && f->State <= 5);
 			if (PtpReport.Contacts[i].TipSwitch && f->Pressure > forceClickMax)
 				forceClickMax = f->Pressure;
 
@@ -654,6 +740,28 @@ AmtPtpServiceTouchInputInterruptType5(
 			PtpReport.Contacts[i].X = prev_contact ? prev_contact->X : (USHORT)x;
 			PtpReport.Contacts[i].Y = prev_contact ? prev_contact->Y : (USHORT)y;
 
+			// Optional PTP usages: contact size in X/Y units (zero only on an "up" report, per
+			// spec), per-contact pressure and the Mechanical Force total; then vendor extras.
+			if (PtpReport.Contacts[i].TipSwitch) {
+				USHORT width, height; // locals: the report is packed, field addresses may be unaligned
+				AmtPtpMt2ContactBox(f->TouchMajor, f->TouchMinor, (UCHAR)f->Orientation, &width, &height);
+				// 90/270 rotation swaps the axes, so the contact box swaps too
+				// (Width and Height share one logical range in the descriptor).
+				if (DeviceContext->Rotation == 90 || DeviceContext->Rotation == 270) {
+					USHORT t = width; width = height; height = t;
+				}
+				PtpReport.Contacts[i].Width = width;
+				PtpReport.Contacts[i].Height = height;
+			}
+			PtpReport.Contacts[i].Pressure = f->Pressure;
+			PtpReport.MechanicalForce += f->Pressure;
+			PtpReport.Contacts[i].Size = f->Size;
+			PtpReport.Contacts[i].TouchMajor = f->TouchMajor;
+			PtpReport.Contacts[i].TouchMinor = f->TouchMinor;
+			PtpReport.Contacts[i].Orientation = (UCHAR)f->Orientation;
+			PtpReport.Contacts[i].Finger = (UCHAR)f->Finger;
+			PtpReport.Contacts[i].State = (UCHAR)f->State;
+
 #undef UINT32_SET_MSB
 
 //#ifdef INPUT_CONTENT_TRACE
@@ -714,7 +822,7 @@ AmtPtpServiceTouchInputInterruptType5(
 		RequestMemory, 
 		0, 
 		(PVOID) &PtpReport, 
-		sizeof(PTP_REPORT)
+		sizeof(PTP_REPORT_MT2)
 	);
 
 	if (!NT_SUCCESS(Status)) {
@@ -730,7 +838,7 @@ AmtPtpServiceTouchInputInterruptType5(
 	// Set result
 	WdfRequestSetInformation(
 		Request, 
-		sizeof(PTP_REPORT)
+		sizeof(PTP_REPORT_MT2)
 	);
 
 	// Set completion flag

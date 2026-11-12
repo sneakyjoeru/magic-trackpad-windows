@@ -4,6 +4,13 @@
 #include <StaticHidRegistry.h>
 #include "Hid.tmh"
 
+// DEFAULT_PTP_HQA_BLOB is a comma-separated list of byte literals. Materialize it once
+// so the whole blob can be copied into the feature report. Assigning the macro to the
+// first array element only stores the first byte (comma operator) and leaves the rest
+// of the 256-byte report untouched.
+static const UCHAR PtpHqaCertificationBlob[] = { DEFAULT_PTP_HQA_BLOB };
+C_ASSERT(sizeof(PtpHqaCertificationBlob) == RTL_FIELD_SIZE(PTP_DEVICE_HQA_CERTIFICATION_REPORT, CertificationBlob));
+
 _IRQL_requires_(PASSIVE_LEVEL)
 NTSTATUS
 AmtPtpGetHidDescriptor(
@@ -494,150 +501,6 @@ exit:
 
 _IRQL_requires_(PASSIVE_LEVEL)
 NTSTATUS
-AmtPtpGetStrings(
-	_In_ WDFDEVICE Device,
-	_In_ WDFREQUEST Request
-)
-{
-	
-	NTSTATUS               status = STATUS_SUCCESS;
-	PDEVICE_CONTEXT        pContext = DeviceGetContext(Device);
-	void                   *pStringBuffer = NULL;
-	WDFMEMORY              memHandle;
-	USHORT                 wcharCount;
-	size_t                 actualSize;
-	UCHAR                  strIndex;
-
-	ULONG                  inputValue;
-	WDFMEMORY              inputMemory;
-	size_t                 inputBufferLength;
-	PVOID                  inputBuffer;
-	ULONG                  languageId, stringId;
-
-	TraceEvents(
-		TRACE_LEVEL_INFORMATION, 
-		TRACE_DRIVER, 
-		"%!FUNC! Entry"
-	);
-
-	status = WdfRequestRetrieveInputMemory(
-		Request, 
-		&inputMemory
-	);
-
-	if (!NT_SUCCESS(status)) {
-		TraceEvents(
-			TRACE_LEVEL_INFORMATION,
-			TRACE_DRIVER, 
-			"%!FUNC! WdfRequestRetrieveInputMemory failed with status %!STATUS!",
-			status
-		);
-		return status;
-	}
-
-	inputBuffer = WdfMemoryGetBuffer(
-		inputMemory, 
-		&inputBufferLength
-	);
-
-	//
-	// make sure buffer is big enough.
-	//
-	if (inputBufferLength < sizeof(ULONG)) {
-		status = STATUS_INVALID_BUFFER_SIZE;
-		TraceEvents(
-			TRACE_LEVEL_INFORMATION, 
-			TRACE_DRIVER, 
-			"%!FUNC! GetStringId: invalid input buffer. size %d, expect %d",
-			(int)inputBufferLength, 
-			(int) sizeof(ULONG)
-		);
-		return status;
-	}
-
-	inputValue = (*(PULONG)inputBuffer);
-	stringId = (inputValue & 0x0ffff);
-	languageId = (inputValue >> 16);
-
-	// Get actual string from USB device
-	switch (stringId)
-	{
-		case HID_STRING_ID_IMANUFACTURER:
-			strIndex = pContext->DeviceDescriptor.iManufacturer;
-			break;
-		case HID_STRING_ID_IPRODUCT:
-			strIndex = pContext->DeviceDescriptor.iProduct;
-			break;
-		case HID_STRING_ID_ISERIALNUMBER:
-			strIndex = pContext->DeviceDescriptor.iSerialNumber;
-			break;
-		default:
-			TraceEvents(
-				TRACE_LEVEL_WARNING, 
-				TRACE_DRIVER, 
-				"%!FUNC! gets invalid string type"
-			);
-			return status;
-	}
-
-	status = WdfUsbTargetDeviceAllocAndQueryString(
-		pContext->UsbDevice, 
-		WDF_NO_OBJECT_ATTRIBUTES, 
-		&memHandle, 
-		&wcharCount, 
-		strIndex, 
-		(USHORT) languageId
-	);
-
-	if (!NT_SUCCESS(status)) {
-		TraceEvents(
-			TRACE_LEVEL_ERROR, 
-			TRACE_DRIVER, "%!FUNC! WdfUsbTargetDeviceAllocAndQueryString failed with %!STATUS!", 
-			status
-		);
-		return status;
-	}
-
-	status = WdfRequestRetrieveOutputBuffer(
-		Request, 
-		wcharCount * sizeof(WCHAR), 
-		&pStringBuffer, 
-		&actualSize
-	);
-
-	if (!NT_SUCCESS(status)) {
-		TraceEvents(
-			TRACE_LEVEL_ERROR, 
-			TRACE_DRIVER, 
-			"%!FUNC! WdfMemoryCopyFromBuffer failed with %!STATUS!", 
-			status
-		);
-		return status;
-	}
-
-	WdfMemoryCopyToBuffer(
-		memHandle,
-		0, 
-		&pStringBuffer, 
-		actualSize
-	);
-
-	WdfRequestSetInformation(
-		Request, 
-		actualSize
-	);
-
-	TraceEvents(
-		TRACE_LEVEL_INFORMATION, 
-		TRACE_DRIVER, 
-		"%!FUNC! Exit"
-	);
-	return status;
-
-}
-
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS
 RequestGetHidXferPacketToReadFromDevice(
 	_In_  WDFREQUEST        Request,
 	_Out_ HID_XFER_PACKET  *Packet
@@ -915,7 +778,7 @@ AmtPtpReportFeatures(
 
 			PPTP_DEVICE_HQA_CERTIFICATION_REPORT certReport = (PPTP_DEVICE_HQA_CERTIFICATION_REPORT) packet.reportBuffer;
 
-			*certReport->CertificationBlob = DEFAULT_PTP_HQA_BLOB;
+			RtlCopyMemory(certReport->CertificationBlob, PtpHqaCertificationBlob, sizeof(certReport->CertificationBlob));
 			certReport->ReportID = REPORTID_PTPHQA;
 
 			TraceEvents(
@@ -1221,6 +1084,6 @@ exit:
 		TRACE_DRIVER, 
 		"%!FUNC! Exit"
 	);
-	return STATUS_SUCCESS;
+	return status;
 
 }

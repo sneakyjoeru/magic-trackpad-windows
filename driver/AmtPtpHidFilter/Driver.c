@@ -38,6 +38,15 @@ DriverEntry(
         WPP_CLEANUP(DriverObject);
         return status;
     }
+
+    // From here a failure deletes the driver object, and its cleanup callback stops WPP.
+    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+    attributes.ParentObject = driver;
+    status = WdfWaitLockCreate(&attributes, &PtpFilterDriverGetContext(driver)->HapticLock);
+    if (!NT_SUCCESS(status)) {
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DRIVER, "WdfWaitLockCreate failed %!STATUS!", status);
+        return status;
+    }
 	
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Driver Initialized");
     return STATUS_SUCCESS;
@@ -131,11 +140,12 @@ PtpFilterReadSettings(
 )
 {
 	DriverContext->ButtonDisabled = PtpFilterReadSettingValue(L"ButtonDisabled", 0) ? TRUE : FALSE;
-	DriverContext->StopPressure = PtpFilterReadSettingValue(L"StopPressure", 0);
+	DriverContext->StopPressure = PtpFilterReadSettingValue(L"StopPressure", 0xffffffff);
 	DriverContext->StopSize = PtpFilterReadSettingValue(L"StopSize", 0xffffffff);
-	DriverContext->IgnoreButtonFinger = PtpFilterReadSettingValue(L"IgnoreButtonFinger", 1) ? TRUE : FALSE;
+	DriverContext->IgnoreButtonFinger = PtpFilterReadSettingValue(L"IgnoreButtonFinger", 0) ? TRUE : FALSE;
 	DriverContext->IgnoreNearFingers = PtpFilterReadSettingValue(L"IgnoreNearFingers", 1) ? TRUE : FALSE;
 	DriverContext->PalmRejection = PtpFilterReadSettingValue(L"PalmRejection", 0) ? TRUE : FALSE;
+	DriverContext->InvertMovement = PtpFilterReadSettingValue(L"InvertMovement", 0) ? TRUE : FALSE;
 	DriverContext->FeedbackClick = PtpFilterReadSettingValue(L"FeedbackClick", 0x08081E);
 	DriverContext->FeedbackRelease = PtpFilterReadSettingValue(L"FeedbackRelease", 0x020218);
 }
