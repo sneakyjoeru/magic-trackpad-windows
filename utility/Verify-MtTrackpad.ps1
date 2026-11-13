@@ -59,14 +59,10 @@ $CTL_RELOAD_SETTINGS = 0x00222000
 $CTL_GET_BATTERY     = 0x00222004
 $CONTROL_DEVICE      = '\\.\AmtPtpControlDeviceUm'
 
-# Wired USB HID interfaces (MI_01 for classic PIDs, MI_00/MI_01 for the resold 27A7 PIDs)
+# Wired USB HID interfaces (MI_01 = the trackpad interface)
 $UsbInterfaces = @(
     'USB\VID_05AC&PID_0324&MI_01',
-    'USB\VID_05AC&PID_0265&MI_01',
-    'USB\VID_27A7&PID_2501&MI_00',
-    'USB\VID_27A7&PID_2501&MI_01',
-    'USB\VID_27A7&PID_9601&MI_00',
-    'USB\VID_27A7&PID_9601&MI_01'
+    'USB\VID_05AC&PID_0265&MI_01'
 )
 # Bluetooth HID collections (Col01 = the trackpad interface our filter binds to)
 $BtInterfaces = @(

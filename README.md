@@ -11,8 +11,6 @@ with the additions this repo needs in practice:
 
 - a signed driver package **plus the certificates it needs**, so one script installs everything;
 - a **one‑click installer** (`Install.cmd`) — UAC prompt, nothing to type;
-- a small **VID 27A7** patch (some Magic Trackpad 2 units enumerate with vendor ID `27A7`
-  instead of `05AC`);
 - a **Windows 10** INF variant (the stock one targets a Windows 11 section);
 - a **tray control panel** with the battery percentage in the icon, per‑user autostart and
   tooltips on every option;
@@ -99,7 +97,6 @@ Tray control panel (right‑click the tray icon):
 | Hardware ID | Device |
 |---|---|
 | `USB\VID_05AC&PID_0324` | Magic Trackpad 2, USB‑C (2024) |
-| `USB\VID_27A7&PID_2501` / `0x9601` | Magic Trackpad 2 resold under VID 27A7 (added here) |
 | `HID\{...}_VID&0001004c_PID&0324&Col01` | Magic Trackpad 2 over Bluetooth |
 
 ## Repository
@@ -122,7 +119,7 @@ magic-trackpad-windows/
 │       ├── ms-signed-amd64/     the shipped package (Microsoft-signed, no test signing)
 │       ├── rotation-selfsigned/ built-from-source rotation + force click package (self-signed)
 │       ├── forceclick-selfsigned/ earlier force-click-only build
-│       └── win10-x64/           optional self-signed variant (VID 27A7 clones)
+│       └── win10-x64/           optional self-signed Windows 10 variant
 └── utility/
     ├── MtTrackpad.ps1           setup / control utility (headless)
     ├── Verify-MtTrackpad.ps1    unattended PASS/FAIL check
@@ -193,5 +190,5 @@ belongs here:
   affiliated with or endorsed by Apple.
 
 Additions in this repository (tray panel extensions, battery reader, elevation relay,
-VID 27A7 / Windows 10 INF variants, installer, utilities) are MIT licensed unless noted
+Windows 10 INF variant, rotation / force click, installer, utilities) are MIT licensed unless noted
 otherwise.

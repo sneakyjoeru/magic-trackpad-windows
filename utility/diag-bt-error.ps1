@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Continue'
 Write-Host '=== 1. TRACKPAD-RELATED PNP DEVICES (status + IDs) ==='
 $all = @(Get-CimInstance Win32_PnPEntity)
-$all | Where-Object { $_.DeviceID -match 'BTH|05AC|27A7' -or $_.Name -match 'Magic|Trackpad' } |
+$all | Where-Object { $_.DeviceID -match 'BTH|05AC|0001004C' -or $_.Name -match 'Magic|Trackpad' } |
     ForEach-Object {
         Write-Host ("DEV={0}" -f $_.DeviceID)
         Write-Host ("  NAME={0} | STATUS={1} | CONFIGCODE={2}" -f $_.Name, $_.Status, $_.ConfigManagerErrorCode)
@@ -25,7 +25,7 @@ $all | Where-Object { $_.DeviceID -match 'BTH|05AC|27A7' -or $_.Name -match 'Mag
 
 Write-Host '=== 2. DRIVER-RELATED EVENT LOG (last 30 min, last 15) ==='
 Get-EventLog -LogName System -After (Get-Date).AddMinutes(-30) -ErrorAction SilentlyContinue |
-    Where-Object { $_.Message -match 'trackpad|AmtPtp|mshidumdf|WUDF|BTH|05AC|27A7' } |
+    Where-Object { $_.Message -match 'trackpad|AmtPtp|mshidumdf|WUDF|BTH|05AC|0001004C' } |
     Select-Object -First 15 |
     ForEach-Object {
         Write-Host ("[{0}] {1} (source={2})" -f $_.TimeWritten, $_.EntryType, $_.Source)

@@ -2,8 +2,8 @@
 rem ============================================================================
 rem  Magic Trackpad for Windows - restore normal driver signature enforcement
 rem
-rem  Turns Windows test signing back OFF (only needed for the self-signed driver
-rem  variant used by VID 27A7 clones). REBOOT afterwards. Secure Boot itself can
+rem  Turns Windows test signing back OFF (only needed for the self-signed
+rem  rotation / force-click driver builds). REBOOT afterwards. Secure Boot itself can
 rem  only be re-enabled in the UEFI/BIOS setup.
 rem
 rem  Double-click; use "Restore-Signature-Enforcement.cmd -DryRun" to just look.

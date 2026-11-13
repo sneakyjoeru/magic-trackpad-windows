@@ -215,7 +215,7 @@ The panel says "Failed to open device. Error: 2" (older notes)
         4. Install.cmd -Clean does step 3 and the install in one go;
         5. still failing? The installer prints every connected trackpad device
            ID it can find. Send that list - if the hardware ID is not one of
-           USB\VID_05AC&PID_0324, USB\VID_27A7&PID_2501/9601 or the Bluetooth
+           USB\VID_05AC&PID_0324 or the Bluetooth
            HID form of 0324, the driver INF does not cover that model yet.
 
 Battery shows "no reading"

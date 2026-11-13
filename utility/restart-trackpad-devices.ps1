@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
   Restarts all PnP devices whose instance name matches the Magic Trackpad
-  USB VID/PIDs (05AC = wired, 27A7 = Bluetooth), forcing the driver to
+  vendor IDs (05AC = wired USB, 0001004C = Bluetooth), forcing the driver to
   re-read its settings with the current defaults.
 #>
 $ErrorActionPreference = 'Stop'
-$pattern = '05AC|27A7'
+$pattern = '05AC|0001004C'
 $devices = @(Get-CimInstance Win32_PnPEntity | Where-Object { $_.DeviceID -match $pattern })
 if (-not $devices) {
     Write-Host 'NO_DEVICES_MATCHED'

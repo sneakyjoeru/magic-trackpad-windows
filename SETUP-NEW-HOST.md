@@ -130,7 +130,7 @@ and elevates itself through a UAC relay).
 pnputil /enum-drivers | findstr /i amtptp
 
 # 2. devices present and started?
-Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match '0324|27A7' } |
+Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match '0324' } |
     Select-Object Status, Class, InstanceId
 
 # 3. full unattended check (exit code 0 = PASS)
@@ -188,9 +188,9 @@ MT2 PIDs).
   `bcdedit | findstr /i testsigning` should say nothing or `No`. If it was switched on earlier (for a
   self-signed build), turn it back off with `bcdedit /set testsigning off` and reboot; Secure Boot
   itself can only be re-enabled in the UEFI/BIOS setup.
-* **VID `27A7` clones** are the only exception: the Microsoft-signed INF does not list them. Such a
-  unit needs a self-signed build from source (`driver\build\make_win10.bat`, patched INF) installed
-  with `install.ps1 -SelfSigned` **and** test signing on. That path is deliberately not shipped.
+* The only exception are the optional **rotation / force-click** builds: modified drivers cannot
+  carry Microsoft's signature, so they are self-signed and need `install.ps1 -SelfSigned` **and**
+  test signing on (see *Force click* below).
 
 ## Moving the trackpad to another PC / "Failed to open device. Error: 2"
 
@@ -231,8 +231,8 @@ before installing this driver. The cleanup script reports them if it finds them.
 
 If the control device is still missing afterwards, check `bcdedit | findstr /i testsigning`
 (lines 1-2 of the list above) — a plain `Install.cmd` already handles the signed/unsigned and
-stale-package cases by itself — then send the device list the installer prints: the driver INF covers `USB\VID_05AC&PID_0324`,
-`USB\VID_27A7&PID_2501/9601` and the Bluetooth HID form of `PID_0324`; any
+stale-package cases by itself — then send the device list the installer prints: the driver INF covers `USB\VID_05AC&PID_0324`
+and the Bluetooth HID form of `PID_0324`; any
 other Apple trackpad PID needs to be added to the INF and re-signed.
 
 ## Force click (optional, self-signed)

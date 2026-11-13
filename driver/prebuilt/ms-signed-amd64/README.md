@@ -19,7 +19,7 @@ pnputil /add-driver .\AmtPtpDevice.inf /install
 pnputil /scan-devices
 ```
 
-VID `27A7` clones are **not** in this INF. Those units need a self-signed build
-(`../../build/make_win10.bat`) installed with `install.ps1 -SelfSigned` and
-Windows test signing enabled - see `../../prebuilt/win10-x64/` and
+The optional rotation / force-click builds are modified drivers and cannot carry
+this signature; they are self-signed, installed with `install.ps1 -SelfSigned`
+and need Windows test signing - see `../rotation-selfsigned/` and
 `SETUP-NEW-HOST.md`.

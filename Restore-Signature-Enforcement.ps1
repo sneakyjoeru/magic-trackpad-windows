@@ -3,7 +3,7 @@
     =======================================================================
 
     Turns Windows test signing back OFF (it is only needed for the
-    self-signed driver variant used by VID 27A7 clones) and reports the state.
+    self-signed rotation / force-click driver builds) and reports the state.
 
         Restore-Signature-Enforcement.cmd      (double-click, one UAC prompt)
         Restore-Signature-Enforcement.cmd -DryRun   (only show the current state)
@@ -74,4 +74,4 @@ Write-Host 'Notes:'
 Write-Host '  * Secure Boot can only be switched back on in the UEFI/BIOS setup.'
 Write-Host '  * The Microsoft-signed driver (what this package installs by default) works'
 Write-Host '    with enforcement on. A self-signed driver would stop loading - only needed'
-Write-Host '    for VID 27A7 clones.'
+Write-Host '    for the rotation / force-click builds.'

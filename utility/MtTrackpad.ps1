@@ -8,7 +8,6 @@
 
     Supported Apple Magic Trackpad USB-C devices:
       USB\VID_05AC&PID_0324  (Magic Trackpad 2, USB-C, 2024)
-      USB\VID_27A7&PID_2501 / 0x9601  (alternate VID revisions)
     Bluetooth: device IDs are captured with "wireless scan" after pairing, then added to the INF.
 
 .PARAMETER Action
@@ -100,9 +99,7 @@ $script:SVC_PARAMS   = 'HKLM:\SYSTEM\CurrentControlSet\Services\AmtPtpHidFilter\
 
 # Known wired hardware IDs (interface level). Extend here when wireless IDs are captured.
 $script:KnownUsbInstances = @(
-    'USB\VID_05AC&PID_0324',     # Magic Trackpad 2 USB-C (2024)
-    'USB\VID_27A7&PID_2501',
-    'USB\VID_27A7&PID_9601'
+    'USB\VID_05AC&PID_0324'      # Magic Trackpad 2 USB-C (2024)
 )
 
 # Haptic feedback presets (DWORD values, same encoding as the upstream control panel)

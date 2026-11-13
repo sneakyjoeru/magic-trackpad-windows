@@ -59,11 +59,6 @@ AmtPtpHidFilter.sys   = 1,,
 %AmtPtpDeviceUsbUm.DeviceDesc%=AmtPtpDeviceUsbUm_Install, USB\Vid_05ac&Pid_0265&MI_01
 ; MT2 USB-C
 %AmtPtpDeviceUsbUm.DeviceDesc%=AmtPtpDeviceUsbUm_Install, USB\Vid_05ac&Pid_0324&MI_01
-; Magic Trackpad 2 USB-C resold under VID 27A7 (both interfaces; remove the unused binding if a phantom pointer appears)
-%AmtPtpDeviceUsbUm.DeviceDesc%=AmtPtpDeviceUsbUm_Install, USB\Vid_27a7&Pid_2501&MI_00
-%AmtPtpDeviceUsbUm.DeviceDesc%=AmtPtpDeviceUsbUm_Install, USB\Vid_27a7&Pid_2501&MI_01
-%AmtPtpDeviceUsbUm.DeviceDesc%=AmtPtpDeviceUsbUm_Install, USB\Vid_27a7&Pid_9601&MI_00
-%AmtPtpDeviceUsbUm.DeviceDesc%=AmtPtpDeviceUsbUm_Install, USB\Vid_27a7&Pid_9601&MI_01
 ; Magic Trackpad 2 Bluetooth
 %AmtPtpHidFilter.DeviceDesc%=AmtPtpHidFilter_MiniPortDevice, HID\{00001124-0000-1000-8000-00805f9b34fb}_VID&0001004c_PID&0265&Col01
 %AmtPtpHidFilter.NullDeviceDesc%=AmtPtpHidFilter_NullDevice, HID\{00001124-0000-1000-8000-00805f9b34fb}_VID&0001004c_PID&0265&Col02

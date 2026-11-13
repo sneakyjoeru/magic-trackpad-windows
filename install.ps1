@@ -26,8 +26,9 @@
         -DriverOnly          only trust the certs + install the driver
         -SelfSigned          install a self-signed package from
                              driver-self-signed\ (if present) and trust the
-                             certificates in certs\. Only needed for VID 27A7
-                             clones, and only with "bcdedit /set testsigning on".
+                             certificates in certs\. Only needed for the
+                             rotation / force-click builds, and only with
+                             "bcdedit /set testsigning on".
                              The default (driver\) is Microsoft-signed and needs
                              neither.
         -NoRepair            do not run the automatic repair (old Apple/self-signed
@@ -246,19 +247,19 @@ function Get-ConnectedTrackpadDevices {
         foreach ($line in (& pnputil.exe /enum-devices /connected 2>$null)) {
             if ($line -match 'Instance ID\s*:\s*(.+)$') {
                 $id = $Matches[1].Trim()
-                if ($id -match '05AC|27A7|0001004C' -and $id -match '0265|0324|030E|2501|9601') { $ids += $id }
+                if ($id -match '05AC|0001004C' -and $id -match '0265|0324|030E') { $ids += $id }
             }
         }
     } catch { }
     if ($ids.Count -gt 0) { return $ids }
 
     $ids = @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue |
-        Where-Object { $_.InstanceId -match '05AC|27A7|0001004C' -and $_.InstanceId -match '0265|0324|030E|2501|9601' } |
+        Where-Object { $_.InstanceId -match '05AC|0001004C' -and $_.InstanceId -match '0265|0324|030E' } |
         ForEach-Object { $_.InstanceId })
     if ($ids.Count -gt 0) { return $ids }
 
     $ids = @(Get-PnpDevice -ErrorAction SilentlyContinue |
-        Where-Object { $_.InstanceId -match '05AC|27A7|0001004C' -and $_.InstanceId -match '0265|0324|030E|2501|9601' } |
+        Where-Object { $_.InstanceId -match '05AC|0001004C' -and $_.InstanceId -match '0265|0324|030E' } |
         ForEach-Object { $_.InstanceId })
     return $ids
 }
@@ -267,7 +268,7 @@ function Restart-TrackpadDevices {
     # A device bound to a driver that failed to start stays in "Error" until the
     # instance is restarted - switching packages is not enough on its own.
     $present = @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue |
-        Where-Object { $_.InstanceId -match '05AC|27A7|0001004C' -and $_.InstanceId -match '0265|0324|030E|2501|9601' })
+        Where-Object { $_.InstanceId -match '05AC|0001004C' -and $_.InstanceId -match '0265|0324|030E' })
     if ($present.Count -eq 0) { return $false }
     Write-Step 'restarting the trackpad device instances so Windows re-binds them'
     $done = 0
@@ -327,7 +328,7 @@ function Show-ControlDeviceState {
         Write-Host '    *** The self-signed package cannot load its KERNEL driver without test signing.' -ForegroundColor Yellow
         Write-Host '        Enable it, then reboot:  bcdedit /set testsigning on   (Secure Boot off)' -ForegroundColor Yellow
         Write-Host '        Better: use the Microsoft-signed package (the default) - it needs' -ForegroundColor Yellow
-        Write-Host '        neither test signing nor certificates, but does not cover VID 27A7.' -ForegroundColor Yellow
+        Write-Host '        neither test signing nor certificates.' -ForegroundColor Yellow
         Write-Host ''
     }
     Write-Host '    Fix, in order:'
@@ -380,7 +381,7 @@ function Show-DeviceState {
     }
     foreach ($d in $devices) { Write-Host "    $d" }
     $problems = @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue |
-        Where-Object { $_.InstanceId -match '05AC|27A7|0001004C' -and $_.InstanceId -match '0265|0324|030E|2501|9601' -and $_.Status -ne 'OK' })
+        Where-Object { $_.InstanceId -match '05AC|0001004C' -and $_.InstanceId -match '0265|0324|030E' -and $_.Status -ne 'OK' })
     if ($problems.Count -gt 0) {
         Write-Warn2 'device present but not started - unplug/replug the cable or reboot'
         return $false

@@ -21,7 +21,7 @@ stays a valid Windows Precision Touchpad.
 
 | File | Notes |
 |---|---|
-| `AmtPtpDevice.inf` | the patched INF (VID `05AC` + `27A7`, Windows 10 section), `DriverVer 09/13/2026,2026.3984.1.1000` |
-| `AmtPtpDevice.cat` | signed by `MtRootCA` (self-signed, timestamped) |
+| `AmtPtpDevice.inf` | the patched INF (VID `05AC`, Windows 10 section), `DriverVer 09/13/2026,2026.3984.1.1000` |
+| `AmtPtpDevice.cat` | re-generated 2026-11-14, self-signed by `MtTrackpadBuild.local`, timestamped |
 | `AmtPtpDeviceUsbUm.dll` | user-mode driver **with** the force-click patch |
 | `AmtPtpHidFilter.sys` | unchanged kernel HID filter |

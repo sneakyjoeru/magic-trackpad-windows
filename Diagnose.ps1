@@ -159,7 +159,7 @@ Add-Cmd 'driver packages (Apple / trackpad)' {
 }
 Add-Cmd 'trackpad devices (all instances)' {
     $d = @(Get-PnpDevice -ErrorAction SilentlyContinue |
-        Where-Object { $_.InstanceId -match '05AC|27A7|0001004C' -and $_.InstanceId -match '0265|0324|030E|2501|9601' })
+        Where-Object { $_.InstanceId -match '05AC|0001004C' -and $_.InstanceId -match '0265|0324|030E' })
     if ($d.Count -eq 0) { 'none - the trackpad is not connected / not enumerated' }
     foreach ($x in $d) { "  status=$($x.Status)  class=$($x.Class)  $($x.InstanceId)" }
 }

@@ -96,7 +96,7 @@ GOING BACK TO THE SIGNED DRIVER (no test signing, no force click)
          bcdedit /set testsigning off      (reboot afterwards)
 
 NOTE
-  The force-click variant is based on our patched INF (VID 05AC and the
-  VID 27A7 clones, Windows 10 section) - the same one the earlier self-signed
+  The force-click variant is based on our patched INF (VID 05AC,
+  Windows 10 section) - the same one the earlier self-signed
   package used. Everything else in this archive is identical to the normal
   package; see README.txt and INSTALL.txt, and the full credits there.

@@ -28,7 +28,7 @@ so no manual certificate import is needed. Back to the Microsoft-signed driver:
 
 | File | Notes |
 |---|---|
-| `AmtPtpDevice.inf` | patched INF (VID `05AC` + `27A7`, Windows 10 section), `DriverVer 09/13/2026,2026.3984.2.1000` |
+| `AmtPtpDevice.inf` | patched INF (VID `05AC`, Windows 10 section), `DriverVer 09/13/2026,2026.3984.2.1000` |
 | `AmtPtpDevice.cat` | self-signed by `MtTrackpadBuild.local`, timestamped |
 | `AmtPtpDeviceUsbUm.dll` | user-mode driver **with rotation + force click** |
 | `AmtPtpHidFilter.sys` | kernel HID filter (rebuilt; rotation is a UMDF-side feature) |

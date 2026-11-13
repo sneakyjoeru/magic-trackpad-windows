@@ -18,7 +18,7 @@
          Apple*trackpad*.inf, MagicTrackpad*.inf),
       2. uninstalls those packages (pnputil /delete-driver ... /uninstall /force),
       3. removes leftover (ghost) device instances for the known Apple trackpad
-         hardware IDs - VID_05AC PID_0265/0324/030E and VID_27A7 PID_2501/9601,
+         hardware IDs - VID_05AC PID_0265/0324/030E (USB and Bluetooth),
       4. stops and disables the AmtPtpHidFilter service if it is still around,
       5. reports known third-party trackpad utilities that hijack the device
          (Magic Utilities, Trackpad++) - uninstall those by hand,
@@ -57,12 +57,12 @@ $infPatterns = @(
     '^magictrackpad.*\.inf$'
 )
 # Hardware IDs of Apple Magic Trackpads. Device instance IDs are messy
-# ("USB\VID_05AC&PID_0324\...", "HID\..._VID&0001004C_PID&0324&COL01\...",
-# "USB\VID_27A7&PID_2501&MI_00\..."), so match vendor and product separately
-# instead of trying to encode the separators. Apple keyboards (PID 1109) and
-# every non-trackpad device are deliberately left alone.
-$vendorPattern  = '05AC|27A7|0001004C'
-$productPattern = '0265|0324|030E|2501|9601'
+# ("USB\VID_05AC&PID_0324\...", "HID\..._VID&0001004C_PID&0324&COL01\..."),
+# so match vendor and product separately instead of trying to encode the
+# separators. Apple keyboards (PID 1109) and every non-trackpad device are
+# deliberately left alone.
+$vendorPattern  = '05AC|0001004C'
+$productPattern = '0265|0324|030E'
 
 function Test-Admin {
     $id = [Security.Principal.WindowsIdentity]::GetCurrent()
